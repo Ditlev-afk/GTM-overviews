@@ -1,15 +1,15 @@
 """
-GTM Campaign Overview — simpel Streamlit-app til Magnus.
+GTM Campaign Overview — Streamlit-app til Magnus.
 
-Overblik først: to integrations-kort (Customer.io + Lemlist) med nøgletal.
-Klik et kort → kampagnetabel for det værktøj. Tilbage via «← Overblik».
+Navigérbart overblik:
+  1. Forside (Integrationer): to store kort for Customer.io og Lemlist
+  2. Kampagneside: søgning + tabel med farvet status og nøgletal
 
-Happy path bruger Dummy data (ingen API-kald). Live API-klienterne nedenfor
-er bevaret til senere — de kaldes kun hvis du aktivt vælger «Live APIs».
+Dummy-data er standard. Thin API-klienter ligger klar til senere Live-brug.
 
 Kør lokalt:
   1. pip install -r requirements.txt
-  2. cp .env.example .env   # kun nødvendigt til Live APIs
+  2. cp .env.example .env   # kun hvis du vil prøve Live APIs
   3. streamlit run app.py
 """
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import pandas as pd
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -26,86 +27,32 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Konstanter / fælles status-værdier (interne nøgler — APIs mapper hertil)
+# Konstanter / fælles status-værdier i vores UI
 # ---------------------------------------------------------------------------
 STATUS_ACTIVE = "active"
 STATUS_PAUSE = "pause"
 STATUS_DRAFT = "draft"
 STATUS_FINISHED = "finished"
 
-ALL_STATUSES = [STATUS_ACTIVE, STATUS_PAUSE, STATUS_DRAFT, STATUS_FINISHED]
-
-# Danske labels til UI (filtre + tabel). Interne nøgler ovenfor ændres ikke.
-STATUS_LABELS_DA = {
+# Danske labels til visning i UI
+STATUS_LABELS = {
     STATUS_ACTIVE: "Aktiv",
     STATUS_PAUSE: "Pause",
     STATUS_DRAFT: "Draft",
     STATUS_FINISHED: "Afsluttet",
 }
-# Omvendt map: dansk label → intern nøgle (til filtre).
-STATUS_FROM_DA = {v: k for k, v in STATUS_LABELS_DA.items()}
+
+# Farvede status-præfikser (emoji) — fungerer pålideligt i st.dataframe
+STATUS_DISPLAY = {
+    STATUS_ACTIVE: "🟢 Aktiv",
+    STATUS_PAUSE: "🟡 Pause",
+    STATUS_DRAFT: "⚪ Draft",
+    STATUS_FINISHED: "🔵 Afsluttet",
+}
 
 SOURCE_CUSTOMERIO = "Customer.io"
 SOURCE_LEMLIST = "Lemlist"
 ALL_SOURCES = [SOURCE_CUSTOMERIO, SOURCE_LEMLIST]
-
-# Kolonner i den fælles tabel (én shape for begge værktøjer).
-# Vi viser name, værktøj, status, leads, open/reply rate + et par rå tal.
-TABLE_COLUMNS = [
-    "name",
-    "source",
-    "status",
-    "leads",
-    "open_rate",
-    "reply_rate",
-    "sent",
-    "replies",
-]
-
-
-# ---------------------------------------------------------------------------
-# Hjælpere til metrics
-# ---------------------------------------------------------------------------
-def _safe_int(value: Any, default: int = 0) -> int:
-    """Konverter til int uden at crashe på None / mærkelige typer."""
-    try:
-        if value is None:
-            return default
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _rate_pct(numerator: int, denominator: int) -> float:
-    """Procent: numerator/denominator*100 når denominator > 0, ellers 0."""
-    if denominator <= 0:
-        return 0.0
-    return round((numerator / denominator) * 100.0, 1)
-
-
-def with_display_fields(campaign: dict[str, Any]) -> dict[str, Any]:
-    """
-    Tilføj felter til UI: dansk status + open_rate / reply_rate.
-
-    Interne status-nøgler (active/pause/…) bevares i rå data til filtrering;
-    her bygger vi en display-række til tabellen.
-    """
-    sent = _safe_int(campaign.get("sent"))
-    opens = _safe_int(campaign.get("opens"))
-    replies = _safe_int(campaign.get("replies"))
-    leads = _safe_int(campaign.get("leads"))
-
-    status_key = campaign.get("status", STATUS_DRAFT)
-    return {
-        "name": campaign.get("name", ""),
-        "source": campaign.get("source", ""),
-        "status": STATUS_LABELS_DA.get(status_key, str(status_key)),
-        "leads": leads,
-        "open_rate": _rate_pct(opens, sent),
-        "reply_rate": _rate_pct(replies, sent),
-        "sent": sent,
-        "replies": replies,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -118,99 +65,98 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "name": "Onboarding drip — nye trials",
             "source": SOURCE_CUSTOMERIO,
             "status": STATUS_ACTIVE,
-            "leads": 1400,
             "sent": 1240,
             "opens": 610,
             "clicks": 188,
             "replies": 42,
+            "leads": 980,
             "external_id": "cio-101",
         },
         {
             "name": "Win-back (90 dage inactivity)",
             "source": SOURCE_CUSTOMERIO,
             "status": STATUS_PAUSE,
-            "leads": 950,
             "sent": 820,
             "opens": 290,
             "clicks": 74,
             "replies": 19,
+            "leads": 640,
             "external_id": "cio-204",
         },
         {
             "name": "Product update — Q4 features",
             "source": SOURCE_CUSTOMERIO,
             "status": STATUS_DRAFT,
-            "leads": 320,
             "sent": 0,
             "opens": 0,
             "clicks": 0,
             "replies": 0,
+            "leads": 120,
             "external_id": "cio-309",
         },
         {
             "name": "Nurture — freemium → paid",
             "source": SOURCE_CUSTOMERIO,
             "status": STATUS_FINISHED,
-            "leads": 4800,
             "sent": 4500,
             "opens": 2100,
             "clicks": 640,
             "replies": 110,
+            "leads": 3200,
             "external_id": "cio-088",
         },
         {
             "name": "Outbound — Nordic SaaS founders",
             "source": SOURCE_LEMLIST,
             "status": STATUS_ACTIVE,
-            "leads": 1100,
             "sent": 980,
             "opens": 520,
             "clicks": 145,
             "replies": 67,
+            "leads": 750,
             "external_id": "lem_abc123",
         },
         {
             "name": "Cold — Agency partners DE/AT",
             "source": SOURCE_LEMLIST,
             "status": STATUS_PAUSE,
-            "leads": 500,
             "sent": 410,
             "opens": 155,
             "clicks": 38,
             "replies": 12,
+            "leads": 380,
             "external_id": "lem_def456",
         },
         {
             "name": "Sequence draft — webinar follow-up",
             "source": SOURCE_LEMLIST,
             "status": STATUS_DRAFT,
-            "leads": 180,
             "sent": 0,
             "opens": 0,
             "clicks": 0,
             "replies": 0,
+            "leads": 95,
             "external_id": "lem_ghi789",
         },
         {
             "name": "Launch week — invite list",
             "source": SOURCE_LEMLIST,
             "status": STATUS_FINISHED,
-            "leads": 1650,
             "sent": 1500,
             "opens": 890,
             "clicks": 310,
             "replies": 95,
+            "leads": 1100,
             "external_id": "lem_jkl012",
         },
     ]
 
 
 # ---------------------------------------------------------------------------
-# Status-mapping: API-værdier → vores fælles UI-status (interne nøgler)
+# Status-mapping: API-værdier → vores fælles UI-status
 # ---------------------------------------------------------------------------
 def map_customerio_status(campaign: dict[str, Any]) -> str:
     """Map Customer.io `active` / `state` til vores status-værdier."""
-    # Dokumenteret felt: active (bool) + state (str). State-værdier kan variere.
     active = campaign.get("active")
     state = str(campaign.get("state") or "").lower()
 
@@ -224,7 +170,6 @@ def map_customerio_status(campaign: dict[str, Any]) -> str:
         }
         return mapping[state]
 
-    # Fallback hvis state mangler: brug active-flaget.
     if active is True:
         return STATUS_ACTIVE
     if active is False:
@@ -234,7 +179,6 @@ def map_customerio_status(campaign: dict[str, Any]) -> str:
 
 def map_lemlist_status(raw_status: Any) -> str:
     """Map Lemlist-status (running/paused/draft/ended/…) til vores UI-status."""
-    # Lemlist kan returnere en streng ELLER en liste af statusser.
     if isinstance(raw_status, list):
         statuses = {str(s).lower() for s in raw_status}
     else:
@@ -251,8 +195,25 @@ def map_lemlist_status(raw_status: Any) -> str:
     return STATUS_DRAFT
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Konverter til int uden at crashe på None / mærkelige typer."""
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _rate(part: int, whole: int) -> float | None:
+    """Beregn andel (0–1). Returnerer None hvis der ikke er sendt noget."""
+    if whole <= 0:
+        return None
+    return part / whole
+
+
 # ---------------------------------------------------------------------------
-# Thin API-klienter
+# Thin API-klienter (ubesugt på Dummy-stien; klar til Live senere)
 # ---------------------------------------------------------------------------
 def fetch_customerio_campaigns() -> list[dict[str, Any]]:
     """
@@ -299,7 +260,6 @@ def fetch_customerio_campaigns() -> list[dict[str, Any]]:
         st.error(f"Customer.io: kunne ikke parse JSON-svar: {exc}")
         return []
 
-    # Svaret er typisk {"campaigns": [...]} — men vi håndterer også en ren liste.
     raw_list = payload.get("campaigns") if isinstance(payload, dict) else payload
     if not isinstance(raw_list, list):
         st.warning(
@@ -312,35 +272,29 @@ def fetch_customerio_campaigns() -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
 
-        # Metrics ligger ofte på et separat endpoint (/metrics).
-        # Vi tager simple felter hvis de findes på listen; ellers 0.
         metrics = item.get("metrics") if isinstance(item.get("metrics"), dict) else {}
-        sent = _safe_int(
+        sent = (
             item.get("sent")
             or metrics.get("sent")
             or metrics.get("delivered")
             or 0
         )
-        opens = _safe_int(
-            item.get("opens") or metrics.get("opened") or metrics.get("opens") or 0
-        )
-        clicks = _safe_int(
+        opens = item.get("opens") or metrics.get("opened") or metrics.get("opens") or 0
+        clicks = (
             item.get("clicks") or metrics.get("clicked") or metrics.get("clicks") or 0
         )
-        # Customer.io har typisk ikke "leads" — brug sent som proxy for leads.
-        leads = _safe_int(item.get("leads") or metrics.get("leads") or sent)
+        leads = item.get("leads") or item.get("audience") or sent
 
         normalized.append(
             {
                 "name": item.get("name") or f"Campaign {item.get('id', '?')}",
                 "source": SOURCE_CUSTOMERIO,
                 "status": map_customerio_status(item),
-                "leads": leads,
-                "sent": sent,
-                "opens": opens,
-                "clicks": clicks,
-                # Customer.io har typisk ikke "replies" på email-kampagner.
+                "sent": _safe_int(sent),
+                "opens": _safe_int(opens),
+                "clicks": _safe_int(clicks),
                 "replies": _safe_int(item.get("replies") or metrics.get("replied")),
+                "leads": _safe_int(leads),
                 "external_id": str(item.get("id", "")),
             }
         )
@@ -366,7 +320,6 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
     params = {"version": "v2", "limit": 100}
 
     try:
-        # Basic auth: username="", password=api_key  →  header "Basic <base64(:key)>"
         response = requests.get(
             url,
             params=params,
@@ -387,7 +340,6 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
         st.error(f"Lemlist: kunne ikke parse JSON-svar: {exc}")
         return []
 
-    # v2 kan returnere {"campaigns": [...]} eller en ren liste.
     if isinstance(payload, dict):
         raw_list = payload.get("campaigns") or payload.get("data") or []
     else:
@@ -402,48 +354,42 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
 
-        # Lemlist-metrics: feltnavne kan variere (stats / metrics / top-level).
         stats = item.get("stats") if isinstance(item.get("stats"), dict) else {}
         metrics = item.get("metrics") if isinstance(item.get("metrics"), dict) else {}
 
-        # nbLeads = antal leads i kampagnen (Lemlist-specifikt felt).
-        leads = _safe_int(
-            item.get("nbLeads")
-            or item.get("leads")
-            or stats.get("nbLeads")
-            or metrics.get("leads")
+        sent = (
+            item.get("sent")
+            or stats.get("sent")
+            or metrics.get("sent")
             or 0
         )
-        # sent = faktisk sendte mails (bruges til open_rate / reply_rate).
-        sent_raw = item.get("sent")
-        if sent_raw is None:
-            sent_raw = stats.get("sent")
-        if sent_raw is None:
-            sent_raw = metrics.get("sent")
-        # Hvis API ikke giver sent, brug leads som proxy (som tidligere version).
-        sent = _safe_int(sent_raw if sent_raw is not None else leads)
-
-        opens = _safe_int(
+        opens = (
             item.get("opens")
             or stats.get("opened")
             or stats.get("opens")
             or metrics.get("opened")
             or 0
         )
-        clicks = _safe_int(
+        clicks = (
             item.get("clicks")
             or stats.get("clicked")
             or stats.get("clicks")
             or metrics.get("clicked")
             or 0
         )
-        replies = _safe_int(
+        replies = (
             item.get("replied")
             or item.get("replies")
             or stats.get("replied")
             or stats.get("replies")
             or metrics.get("replied")
             or 0
+        )
+        leads = (
+            item.get("nbLeads")
+            or item.get("leads")
+            or stats.get("leads")
+            or sent
         )
 
         normalized.append(
@@ -452,11 +398,11 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
                 or f"Campaign {item.get('_id') or item.get('id') or '?'}",
                 "source": SOURCE_LEMLIST,
                 "status": map_lemlist_status(item.get("status")),
-                "leads": leads if leads > 0 else sent,
-                "sent": sent,
-                "opens": opens,
-                "clicks": clicks,
-                "replies": replies,
+                "sent": _safe_int(sent),
+                "opens": _safe_int(opens),
+                "clicks": _safe_int(clicks),
+                "replies": _safe_int(replies),
+                "leads": _safe_int(leads),
                 "external_id": str(item.get("_id") or item.get("id") or ""),
             }
         )
@@ -472,194 +418,241 @@ def load_live_campaigns() -> list[dict[str, Any]]:
     return campaigns
 
 
+def load_campaigns(mode: str) -> list[dict[str, Any]]:
+    """Vælg Dummy eller Live og returnér normaliserede kampagner."""
+    if mode == "Dummy":
+        return get_dummy_campaigns()
+
+    with st.spinner("Henter kampagner fra Customer.io og Lemlist…"):
+        campaigns = load_live_campaigns()
+    if not campaigns:
+        st.warning(
+            "Ingen kampagner hentet. Tjek API-nøgler, netværk og fejlbeskeder. "
+            "Skift til Dummy for at teste UI'et."
+        )
+    return campaigns
+
+
 # ---------------------------------------------------------------------------
-# Streamlit UI — overblik → detalje (session_state)
+# Hjælpere til UI
 # ---------------------------------------------------------------------------
-# Navigation: st.session_state["selected_source"]
-#   None            → overblik (to integrations-kort)
-#   "Customer.io"   → kampagnetabel for Customer.io
-#   "Lemlist"       → kampagnetabel for Lemlist
-#
-# Streamlit har ikke ægte klikbare kort — vi bruger st.button under hvert kort.
+def _source_stats(campaigns: list[dict[str, Any]], source: str) -> dict[str, int]:
+    """Antal kampagner + aktive for én integration."""
+    rows = [c for c in campaigns if c.get("source") == source]
+    active = sum(1 for c in rows if c.get("status") == STATUS_ACTIVE)
+    return {"total": len(rows), "active": active}
 
 
-def _init_session_state() -> None:
-    """Sørg for at navigations-nøglen findes (None = overblik)."""
-    if "selected_source" not in st.session_state:
-        st.session_state.selected_source = None
+def _go_to_source(source: str) -> None:
+    """Naviger til kampagnesiden for en given integration."""
+    st.session_state["page"] = "campaigns"
+    st.session_state["selected_source"] = source
 
 
-def _campaigns_for_source(
-    campaigns: list[dict[str, Any]], source: str
-) -> list[dict[str, Any]]:
-    """Filtrér kampagner til ét værktøj (source)."""
-    return [c for c in campaigns if c.get("source") == source]
+def _go_home() -> None:
+    """Tilbage til Integrationer-forsiden."""
+    st.session_state["page"] = "home"
+    st.session_state["selected_source"] = None
+    st.session_state["campaign_search"] = ""
 
 
-def _source_stats(
-    campaigns: list[dict[str, Any]], source: str
-) -> dict[str, int]:
-    """
-    Nøgletal til overblikskortet: total + aktive.
-
-    Pause/draft/afsluttet tælles ikke på kortet — hold det scannbart.
-    """
-    subset = _campaigns_for_source(campaigns, source)
-    return {
-        "total": len(subset),
-        "active": sum(1 for c in subset if c.get("status") == STATUS_ACTIVE),
-    }
-
-
-def _dataframe_column_config() -> dict[str, Any]:
-    """Fælles danske kolonne-labels til st.dataframe."""
-    return {
-        "name": st.column_config.TextColumn("Navn"),
-        "source": st.column_config.TextColumn("Værktøj"),
-        "status": st.column_config.TextColumn("Status"),
-        "leads": st.column_config.NumberColumn("Leads", format="%d"),
-        "open_rate": st.column_config.NumberColumn("Open rate", format="%.1f%%"),
-        "reply_rate": st.column_config.NumberColumn(
-            "Reply rate", format="%.1f%%"
-        ),
-        "sent": st.column_config.NumberColumn("Sent", format="%d"),
-        "replies": st.column_config.NumberColumn("Replies", format="%d"),
-    }
-
-
-def render_overview(campaigns: list[dict[str, Any]]) -> None:
-    """
-    Forside: to integrations-kort side om side.
-
-    Hvert kort viser total + aktive. Knappen under kortet åbner detaljen.
-    """
-    st.subheader("Integrationer")
-    st.caption("Vælg et værktøj for at se kampagnerne.")
-
-    cols = st.columns(2)
-    for col, source in zip(cols, ALL_SOURCES):
-        stats = _source_stats(campaigns, source)
-        with col:
-            # Visuelt «kort»: container + metrics + knap (klik = åbn detalje).
-            with st.container(border=True):
-                st.markdown(f"### {source}")
-                m1, m2 = st.columns(2)
-                m1.metric("Kampagner i alt", stats["total"])
-                m2.metric("Aktive", stats["active"])
-
-                if st.button(
-                    f"Åbn {source}",
-                    key=f"open_{source}",
-                    use_container_width=True,
-                    type="primary",
-                ):
-                    st.session_state.selected_source = source
-                    st.rerun()
-
-
-def render_detail(
-    campaigns: list[dict[str, Any]], source: str
-) -> None:
-    """
-    Detaljevisning for ét værktøj: lille status-filter + kampagnetabel.
-
-    Store filtre hører IKKE til forsiden — kun her, og kun status.
-    """
-    # Tilbage til overblik.
-    if st.button("← Overblik", key="back_to_overview"):
-        st.session_state.selected_source = None
-        st.rerun()
-
-    st.subheader(source)
-    subset = _campaigns_for_source(campaigns, source)
-
-    # Subtilt status-filter (kun på detaljesiden).
-    status_options_da = [STATUS_LABELS_DA[s] for s in ALL_STATUSES]
-    selected_statuses_da = st.multiselect(
-        "Filtrér på status",
-        options=status_options_da,
-        default=status_options_da,
-        help="Valgfrit — viser alle statusser som standard.",
+def _inject_light_css() -> None:
+    """Minimal CSS så integrationskort føles mere substantielle."""
+    st.markdown(
+        """
+        <style>
+        /* Lidt luft mellem kortenes metric-rækker */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            padding-top: 0.4rem;
+            padding-bottom: 0.6rem;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] h3 {
+            margin-bottom: 0.2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    selected_statuses = {STATUS_FROM_DA[label] for label in selected_statuses_da}
 
-    filtered = [c for c in subset if c.get("status") in selected_statuses]
 
-    st.caption(f"{len(filtered)} kampagne(r) vist")
+# ---------------------------------------------------------------------------
+# Sider
+# ---------------------------------------------------------------------------
+def render_integration_card(
+    source: str,
+    stats: dict[str, int],
+    *,
+    has_data: bool,
+) -> None:
+    """Ét stort integrationskort med metrics + fuld-bredde Åbn-knap."""
+    with st.container(border=True):
+        st.markdown(f"### {source}")
 
-    if not filtered:
-        st.write("Ingen kampagner matcher filteret.")
+        m1, m2 = st.columns(2)
+        m1.metric("Kampagner i alt", stats["total"])
+        m2.metric("Aktive", stats["active"])
+
+        if has_data and stats["total"] > 0:
+            st.caption("● OK — data tilgængelig")
+        elif has_data:
+            st.caption("○ Ingen kampagner endnu")
+        else:
+            st.caption("○ Ingen data")
+
+        st.write("")  # lidt luft før knappen
+        if st.button(
+            f"Åbn {source}",
+            key=f"open_{source}",
+            use_container_width=True,
+            type="primary",
+        ):
+            _go_to_source(source)
+            st.rerun()
+
+
+def render_home(campaigns: list[dict[str, Any]]) -> None:
+    """Forside: Integrationer — to store kort side om side."""
+    st.title("Integrationer")
+    st.caption("GTM-overblik · Customer.io og Lemlist")
+
+    st.write("")
+
+    col_cio, col_lem = st.columns(2)
+
+    cio_stats = _source_stats(campaigns, SOURCE_CUSTOMERIO)
+    lem_stats = _source_stats(campaigns, SOURCE_LEMLIST)
+
+    with col_cio:
+        render_integration_card(
+            SOURCE_CUSTOMERIO,
+            cio_stats,
+            has_data=True,
+        )
+
+    with col_lem:
+        render_integration_card(
+            SOURCE_LEMLIST,
+            lem_stats,
+            has_data=True,
+        )
+
+
+def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
+    """Kampagneside for én integration: tilbage, søgning, tabel."""
+    # Header med tilbage-knap
+    back_col, title_col = st.columns([1, 5], vertical_alignment="center")
+    with back_col:
+        if st.button("← Tilbage", use_container_width=True):
+            _go_home()
+            st.rerun()
+    with title_col:
+        st.title(source)
+        st.caption("Kampagner for denne integration")
+
+    # Kun kampagner for den valgte integration
+    rows = [c for c in campaigns if c.get("source") == source]
+
+    # Simpel søgning på kampagnenavn
+    search = st.text_input(
+        "Søg på kampagnenavn",
+        key="campaign_search",
+        placeholder="Skriv for at filtrere…",
+    )
+    query = (search or "").strip().lower()
+    if query:
+        rows = [c for c in rows if query in str(c.get("name", "")).lower()]
+
+    st.subheader(f"Kampagner ({len(rows)})")
+
+    if not rows:
+        st.write("Ingen kampagner matcher søgningen.")
         return
 
-    display_rows = [with_display_fields(c) for c in filtered]
+    # Byg visnings-dataframe med danske kolonner + farvet status
+    display_rows: list[dict[str, Any]] = []
+    for c in rows:
+        sent = _safe_int(c.get("sent"))
+        opens = _safe_int(c.get("opens"))
+        replies = _safe_int(c.get("replies"))
+        leads = _safe_int(c.get("leads"), default=sent)
+        status_key = str(c.get("status") or STATUS_DRAFT)
+
+        display_rows.append(
+            {
+                "Kampagnenavn": c.get("name", ""),
+                "Status": STATUS_DISPLAY.get(
+                    status_key, STATUS_LABELS.get(status_key, status_key)
+                ),
+                "Open rate": _rate(opens, sent),
+                "Reply rate": _rate(replies, sent),
+                "Antal leads": leads,
+            }
+        )
+
+    df = pd.DataFrame(display_rows)
+
     st.dataframe(
-        display_rows,
+        df,
         use_container_width=True,
         hide_index=True,
-        column_order=TABLE_COLUMNS,
-        column_config=_dataframe_column_config(),
+        column_config={
+            "Kampagnenavn": st.column_config.TextColumn("Kampagnenavn", width="large"),
+            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Open rate": st.column_config.NumberColumn(
+                "Open rate",
+                format="percent",
+                help="Opens / sent",
+            ),
+            "Reply rate": st.column_config.NumberColumn(
+                "Reply rate",
+                format="percent",
+                help="Replies / sent",
+            ),
+            "Antal leads": st.column_config.NumberColumn("Antal leads", format="%d"),
+        },
     )
 
 
+# ---------------------------------------------------------------------------
+# Streamlit UI
+# ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(
-        page_title="GTM Campaign Overview",
+        page_title="GTM overblik · Integrationer",
         page_icon="📊",
         layout="wide",
     )
-    _init_session_state()
 
-    st.title("GTM Campaign Overview")
-    st.caption(
-        "Overblik over Customer.io og Lemlist — start med integrationerne, "
-        "klik dig ind på kampagnerne."
-    )
+    # Session-state til simpel navigation
+    if "page" not in st.session_state:
+        st.session_state["page"] = "home"
+    if "selected_source" not in st.session_state:
+        st.session_state["selected_source"] = None
 
-    # --- Sidebar: kun datakilde (minimal). Ingen store filtre her. ---
+    _inject_light_css()
+
+    # Sidebar: kun minimal Dummy/Live-toggle (standard = Dummy)
     with st.sidebar:
         st.header("Indstillinger")
-        # Default = Dummy data (index=0). Live APIs er valgfrit og uberørt
-        # på happy path — klientkoden ovenfor kaldes kun i Live-mode.
         mode = st.radio(
             "Datakilde",
-            options=["Dummy data", "Live APIs"],
+            options=["Dummy", "Live"],
             index=0,
-            help=(
-                "Dummy data kræver ingen API-nøgler (anbefalet til UI). "
-                "Live APIs læser nøgler fra .env / miljøvariabler."
-            ),
-        )
-        st.divider()
-        st.markdown(
-            "Tip: kopiér `.env.example` → `.env` og udfyld nøglerne "
-            "før du skifter til **Live APIs**."
+            help="Dummy kræver ingen API-nøgler. Live læser nøgler fra .env / miljø.",
         )
 
-    # --- Hent data (Dummy = happy path, ingen netværk) ---
-    if mode == "Dummy data":
-        campaigns = get_dummy_campaigns()
-        st.info("Viser dummy-data (ingen API-kald).")
-    else:
-        with st.spinner("Henter kampagner fra Customer.io og Lemlist…"):
-            campaigns = load_live_campaigns()
-        if not campaigns:
-            st.warning(
-                "Ingen kampagner hentet. Tjek API-nøgler, netværk og fejlbeskeder ovenfor. "
-                "Skift til Dummy data for at teste UI'et."
-            )
+    campaigns = load_campaigns(mode)
 
-    # --- Navigation: overblik ELLER detalje ---
-    selected = st.session_state.selected_source
-    if selected is None:
-        render_overview(campaigns)
-    elif selected in ALL_SOURCES:
-        render_detail(campaigns, selected)
+    page = st.session_state.get("page", "home")
+    selected = st.session_state.get("selected_source")
+
+    if page == "campaigns" and selected in ALL_SOURCES:
+        render_campaigns(campaigns, selected)
     else:
-        # Ukendt værdi i session_state → reset til overblik.
-        st.session_state.selected_source = None
-        render_overview(campaigns)
+        # Sikrer at vi lander rent på forsiden hvis state er mærkelig
+        st.session_state["page"] = "home"
+        render_home(campaigns)
 
 
 if __name__ == "__main__":
     main()
-
