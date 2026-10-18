@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import pandas as pd
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -42,7 +41,7 @@ STATUS_LABELS = {
     STATUS_FINISHED: "Afsluttet",
 }
 
-# Farvede status-præfikser (emoji) — fungerer pålideligt i st.dataframe
+# Farvede status-præfikser (emoji) — plain text, no Arrow/dataframe stack
 STATUS_DISPLAY = {
     STATUS_ACTIVE: "🟢 Aktiv",
     STATUS_PAUSE: "🟡 Pause",
@@ -210,6 +209,14 @@ def _rate(part: int, whole: int) -> float | None:
     if whole <= 0:
         return None
     return part / whole
+
+
+def _format_rate(part: int, whole: int) -> str:
+    """Vis rate som procent-streng (undgår pandas/Arrow i tabellen)."""
+    rate = _rate(part, whole)
+    if rate is None:
+        return "—"
+    return f"{rate * 100:.1f}%"
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +575,8 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
         st.write("Ingen kampagner matcher søgningen.")
         return
 
-    # Byg visnings-dataframe med danske kolonner + farvet status
+    # List-of-dicts + st.table — ingen pandas/DataFrame, så Cloud's Arrow-dance
+    # (pyarrow 26 segfault → force <25) ikke behøver at matche vores pins.
     display_rows: list[dict[str, Any]] = []
     for c in rows:
         sent = _safe_int(c.get("sent"))
@@ -583,34 +591,13 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
                 "Status": STATUS_DISPLAY.get(
                     status_key, STATUS_LABELS.get(status_key, status_key)
                 ),
-                "Open rate": _rate(opens, sent),
-                "Reply rate": _rate(replies, sent),
+                "Open rate": _format_rate(opens, sent),
+                "Reply rate": _format_rate(replies, sent),
                 "Antal leads": leads,
             }
         )
 
-    df = pd.DataFrame(display_rows)
-
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Kampagnenavn": st.column_config.TextColumn("Kampagnenavn", width="large"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
-            "Open rate": st.column_config.NumberColumn(
-                "Open rate",
-                format="percent",
-                help="Opens / sent",
-            ),
-            "Reply rate": st.column_config.NumberColumn(
-                "Reply rate",
-                format="percent",
-                help="Replies / sent",
-            ),
-            "Antal leads": st.column_config.NumberColumn("Antal leads", format="%d"),
-        },
-    )
+    st.table(display_rows)
 
 
 # ---------------------------------------------------------------------------

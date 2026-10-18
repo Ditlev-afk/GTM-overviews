@@ -18,6 +18,12 @@ cp .env.example .env   # kun nødvendigt til Live APIs
 streamlit run app.py
 ```
 
+## Streamlit Community Cloud
+
+Efter push: **Reboot app** i Cloud-dashboardet, så den henter den nye `requirements.txt`.
+
+Hvis app-settings tillader det, vælg **Python 3.12** (mere stabilt end 3.14 på Cloud). Appen er skrevet til at køre uden pandas/pyarrow-pins, også hvis Cloud bliver på 3.14.
+
 ## Secrets
 
 Læg aldrig rigtige API-nøgler i git. Brug `.env` lokalt (se `.env.example`) eller Streamlit Cloud secrets.
