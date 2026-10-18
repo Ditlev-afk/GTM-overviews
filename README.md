@@ -1,14 +1,16 @@
 # GTM Campaign Overview
 
-Simpel Streamlit-app med overblik over Customer.io og Lemlist-kampagner.
+Simpel Streamlit-app med overblik over GTM-kampagner fra syv værktøjer:
+
+**Customer.io · Lemlist · Instantly · Smartlead · Apollo · Clay · HubSpot**
 
 ## Sådan virker UI
 
-1. **Overblik** — to integrations-kort med antal kampagner og antal aktive
-2. **Klik et kort** — kampagnetabel for det værktøj (status + metrics)
-3. **← Overblik** — tilbage til forsiden (ingen store filtre på forsiden)
+1. **Forside (Integrationer)** — kort-grid med alle værktøjer (kampagner i alt + aktive)
+2. **Åbn et kort** — kampagnetabel for det værktøj (status, open/reply rate, leads)
+3. **← Tilbage** — tilbage til forsiden (ingen filtre på forsiden)
 
-Standard er **Dummy data** (ingen API-kald). Live API-klienter er i koden, men bruges kun hvis du aktivt vælger dem.
+Standard er **Dummy data** (ingen API-kald). Thin Live-klienter findes for Customer.io og Lemlist; de øvrige er dummy indtil videre.
 
 ## Kør lokalt
 
@@ -20,9 +22,9 @@ streamlit run app.py
 
 ## Streamlit Community Cloud
 
-Efter push: **Reboot app** i Cloud-dashboardet, så den henter den nye `requirements.txt`.
+Efter push: vent på auto-redeploy, eller **Reboot app** i Cloud-dashboardet hvis den hænger.
 
-Hvis app-settings tillader det, vælg **Python 3.12** (mere stabilt end 3.14 på Cloud). Appen er skrevet til at køre uden pandas/pyarrow-pins, også hvis Cloud bliver på 3.14.
+Hvis app-settings tillader det, vælg **Python 3.12** (mere stabilt end 3.14 på Cloud). Appen bruger `st.table(list[dict])` uden pandas/pyarrow.
 
 ## Secrets
 

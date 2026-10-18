@@ -2,10 +2,13 @@
 GTM Campaign Overview — Streamlit-app til Magnus.
 
 Navigérbart overblik:
-  1. Forside (Integrationer): to store kort for Customer.io og Lemlist
+  1. Forside (Integrationer): kort-grid for alle værktøjer
   2. Kampagneside: søgning + tabel med farvet status og nøgletal
 
-Dummy-data er standard. Thin API-klienter ligger klar til senere Live-brug.
+Integrationer: Customer.io, Lemlist, Instantly, Smartlead, Apollo, Clay, HubSpot.
+
+Dummy-data er standard. Thin API-klienter for Customer.io/Lemlist ligger klar
+til senere Live-brug — nye værktøjer er kun dummy indtil videre.
 
 Kør lokalt:
   1. pip install -r requirements.txt
@@ -51,15 +54,34 @@ STATUS_DISPLAY = {
 
 SOURCE_CUSTOMERIO = "Customer.io"
 SOURCE_LEMLIST = "Lemlist"
-ALL_SOURCES = [SOURCE_CUSTOMERIO, SOURCE_LEMLIST]
+SOURCE_INSTANTLY = "Instantly"
+SOURCE_SMARTLEAD = "Smartlead"
+SOURCE_APOLLO = "Apollo"
+SOURCE_CLAY = "Clay"
+SOURCE_HUBSPOT = "HubSpot"
+
+# Rækkefølge på forsiden (kort-grid)
+ALL_SOURCES = [
+    SOURCE_CUSTOMERIO,
+    SOURCE_LEMLIST,
+    SOURCE_INSTANTLY,
+    SOURCE_SMARTLEAD,
+    SOURCE_APOLLO,
+    SOURCE_CLAY,
+    SOURCE_HUBSPOT,
+]
+
+# Antal kort pr. række på forsiden (2–3 kolonner)
+GRID_COLS = 3
 
 
 # ---------------------------------------------------------------------------
 # Dummy-data — bruges når du tester UI uden API-nøgler
 # ---------------------------------------------------------------------------
 def get_dummy_campaigns() -> list[dict[str, Any]]:
-    """Returnerer et lille, realistisk dummy-datasæt fra begge værktøjer."""
+    """Returnerer realistisk dummy-data for alle integrationer."""
     return [
+        # --- Customer.io ---
         {
             "name": "Onboarding drip — nye trials",
             "source": SOURCE_CUSTOMERIO,
@@ -104,6 +126,7 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "leads": 3200,
             "external_id": "cio-088",
         },
+        # --- Lemlist ---
         {
             "name": "Outbound — Nordic SaaS founders",
             "source": SOURCE_LEMLIST,
@@ -147,6 +170,242 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 95,
             "leads": 1100,
             "external_id": "lem_jkl012",
+        },
+        # --- Instantly ---
+        {
+            "name": "Instantly — Series A CTOs EU",
+            "source": SOURCE_INSTANTLY,
+            "status": STATUS_ACTIVE,
+            "sent": 2100,
+            "opens": 980,
+            "clicks": 210,
+            "replies": 142,
+            "leads": 1850,
+            "external_id": "ins_eu_cto_01",
+        },
+        {
+            "name": "Instantly — Warm intro follow-up",
+            "source": SOURCE_INSTANTLY,
+            "status": STATUS_ACTIVE,
+            "sent": 640,
+            "opens": 410,
+            "clicks": 95,
+            "replies": 58,
+            "leads": 520,
+            "external_id": "ins_warm_02",
+        },
+        {
+            "name": "Instantly — Inbox rotation test",
+            "source": SOURCE_INSTANTLY,
+            "status": STATUS_PAUSE,
+            "sent": 300,
+            "opens": 90,
+            "clicks": 12,
+            "replies": 4,
+            "leads": 280,
+            "external_id": "ins_rot_03",
+        },
+        {
+            "name": "Instantly — Q1 copy A/B draft",
+            "source": SOURCE_INSTANTLY,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 150,
+            "external_id": "ins_ab_04",
+        },
+        # --- Smartlead ---
+        {
+            "name": "Smartlead — PLG self-serve upsell",
+            "source": SOURCE_SMARTLEAD,
+            "status": STATUS_ACTIVE,
+            "sent": 1750,
+            "opens": 720,
+            "clicks": 180,
+            "replies": 96,
+            "leads": 1400,
+            "external_id": "sl_plg_01",
+        },
+        {
+            "name": "Smartlead — Partner channel outreach",
+            "source": SOURCE_SMARTLEAD,
+            "status": STATUS_PAUSE,
+            "sent": 520,
+            "opens": 180,
+            "clicks": 40,
+            "replies": 15,
+            "leads": 480,
+            "external_id": "sl_partner_02",
+        },
+        {
+            "name": "Smartlead — Event RSVP chase",
+            "source": SOURCE_SMARTLEAD,
+            "status": STATUS_FINISHED,
+            "sent": 890,
+            "opens": 510,
+            "clicks": 160,
+            "replies": 72,
+            "leads": 800,
+            "external_id": "sl_event_03",
+        },
+        {
+            "name": "Smartlead — Multi-inbox draft",
+            "source": SOURCE_SMARTLEAD,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 220,
+            "external_id": "sl_draft_04",
+        },
+        # --- Apollo ---
+        {
+            "name": "Apollo — VP Sales US mid-market",
+            "source": SOURCE_APOLLO,
+            "status": STATUS_ACTIVE,
+            "sent": 1320,
+            "opens": 540,
+            "clicks": 120,
+            "replies": 61,
+            "leads": 1100,
+            "external_id": "apl_vps_01",
+        },
+        {
+            "name": "Apollo — Intent: hiring RevOps",
+            "source": SOURCE_APOLLO,
+            "status": STATUS_ACTIVE,
+            "sent": 760,
+            "opens": 310,
+            "clicks": 85,
+            "replies": 39,
+            "leads": 690,
+            "external_id": "apl_intent_02",
+        },
+        {
+            "name": "Apollo — Sequence paused (bounce)",
+            "source": SOURCE_APOLLO,
+            "status": STATUS_PAUSE,
+            "sent": 210,
+            "opens": 55,
+            "clicks": 8,
+            "replies": 2,
+            "leads": 200,
+            "external_id": "apl_bounce_03",
+        },
+        {
+            "name": "Apollo — New ICP draft",
+            "source": SOURCE_APOLLO,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 340,
+            "external_id": "apl_icp_04",
+        },
+        # --- Clay ---
+        {
+            "name": "Clay — Enrich + push to Instantly",
+            "source": SOURCE_CLAY,
+            "status": STATUS_ACTIVE,
+            "sent": 900,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 900,
+            "external_id": "clay_enrich_01",
+        },
+        {
+            "name": "Clay — Lookalike: closed-won accounts",
+            "source": SOURCE_CLAY,
+            "status": STATUS_ACTIVE,
+            "sent": 450,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 450,
+            "external_id": "clay_lal_02",
+        },
+        {
+            "name": "Clay — Waterfall email find (paused)",
+            "source": SOURCE_CLAY,
+            "status": STATUS_PAUSE,
+            "sent": 1200,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 1200,
+            "external_id": "clay_wf_03",
+        },
+        {
+            "name": "Clay — Scraping table draft",
+            "source": SOURCE_CLAY,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 80,
+            "external_id": "clay_draft_04",
+        },
+        # --- HubSpot ---
+        {
+            "name": "HubSpot — MQL nurture (email)",
+            "source": SOURCE_HUBSPOT,
+            "status": STATUS_ACTIVE,
+            "sent": 3200,
+            "opens": 1450,
+            "clicks": 420,
+            "replies": 55,
+            "leads": 2800,
+            "external_id": "hs_mql_01",
+        },
+        {
+            "name": "HubSpot — Demo no-show recovery",
+            "source": SOURCE_HUBSPOT,
+            "status": STATUS_ACTIVE,
+            "sent": 480,
+            "opens": 260,
+            "clicks": 95,
+            "replies": 38,
+            "leads": 420,
+            "external_id": "hs_noshow_02",
+        },
+        {
+            "name": "HubSpot — Newsletter pause (Q4)",
+            "source": SOURCE_HUBSPOT,
+            "status": STATUS_PAUSE,
+            "sent": 5600,
+            "opens": 2100,
+            "clicks": 380,
+            "replies": 22,
+            "leads": 5100,
+            "external_id": "hs_news_03",
+        },
+        {
+            "name": "HubSpot — Lifecycle score draft",
+            "source": SOURCE_HUBSPOT,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 0,
+            "external_id": "hs_score_04",
+        },
+        {
+            "name": "HubSpot — Customer success check-in",
+            "source": SOURCE_HUBSPOT,
+            "status": STATUS_FINISHED,
+            "sent": 1100,
+            "opens": 680,
+            "clicks": 190,
+            "replies": 84,
+            "leads": 950,
+            "external_id": "hs_cs_05",
         },
     ]
 
@@ -220,7 +479,7 @@ def _format_rate(part: int, whole: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Thin API-klienter (ubesugt på Dummy-stien; klar til Live senere)
+# Thin API-klienter (kun CIO + Lemlist; andre værktøjer er dummy indtil videre)
 # ---------------------------------------------------------------------------
 def fetch_customerio_campaigns() -> list[dict[str, Any]]:
     """
@@ -418,7 +677,12 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
 
 
 def load_live_campaigns() -> list[dict[str, Any]]:
-    """Hent fra begge API'er og slå resultaterne sammen (fejl stopper ikke resten)."""
+    """
+    Hent fra CIO + Lemlist (fejl stopper ikke resten).
+
+    Instantly / Smartlead / Apollo / Clay / HubSpot har endnu ingen Live-klienter
+    — i Live-mode får du kun CIO/Lemlist indtil videre.
+    """
     campaigns: list[dict[str, Any]] = []
     campaigns.extend(fetch_customerio_campaigns())
     campaigns.extend(fetch_lemlist_campaigns())
@@ -491,7 +755,7 @@ def render_integration_card(
     *,
     has_data: bool,
 ) -> None:
-    """Ét stort integrationskort med metrics + fuld-bredde Åbn-knap."""
+    """Ét integrationskort med metrics + fuld-bredde Åbn-knap."""
     with st.container(border=True):
         st.markdown(f"### {source}")
 
@@ -518,30 +782,23 @@ def render_integration_card(
 
 
 def render_home(campaigns: list[dict[str, Any]]) -> None:
-    """Forside: Integrationer — to store kort side om side."""
+    """Forside: Integrationer — alle værktøjer i et kort-grid (ingen filtre)."""
     st.title("Integrationer")
-    st.caption("GTM-overblik · Customer.io og Lemlist")
+    st.caption(
+        "GTM-overblik · Customer.io, Lemlist, Instantly, Smartlead, "
+        "Apollo, Clay og HubSpot"
+    )
 
     st.write("")
 
-    col_cio, col_lem = st.columns(2)
-
-    cio_stats = _source_stats(campaigns, SOURCE_CUSTOMERIO)
-    lem_stats = _source_stats(campaigns, SOURCE_LEMLIST)
-
-    with col_cio:
-        render_integration_card(
-            SOURCE_CUSTOMERIO,
-            cio_stats,
-            has_data=True,
-        )
-
-    with col_lem:
-        render_integration_card(
-            SOURCE_LEMLIST,
-            lem_stats,
-            has_data=True,
-        )
+    # Grid: GRID_COLS kolonner pr. række, wrap resterende kilder
+    for row_start in range(0, len(ALL_SOURCES), GRID_COLS):
+        row_sources = ALL_SOURCES[row_start : row_start + GRID_COLS]
+        cols = st.columns(GRID_COLS)
+        for idx, source in enumerate(row_sources):
+            with cols[idx]:
+                stats = _source_stats(campaigns, source)
+                render_integration_card(source, stats, has_data=True)
 
 
 def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
@@ -625,7 +882,10 @@ def main() -> None:
             "Datakilde",
             options=["Dummy", "Live"],
             index=0,
-            help="Dummy kræver ingen API-nøgler. Live læser nøgler fra .env / miljø.",
+            help=(
+                "Dummy kræver ingen API-nøgler (alle 7 værktøjer). "
+                "Live henter kun Customer.io + Lemlist indtil videre."
+            ),
         )
 
     campaigns = load_campaigns(mode)
