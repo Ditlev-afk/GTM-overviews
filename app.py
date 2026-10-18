@@ -1,11 +1,9 @@
 """
-GTM Campaign Overview — Streamlit-app til Magnus.
+GTM / commercial hub — Streamlit-app (Keen-inspireret) til partnerships & GTM.
 
-Navigérbart overblik:
-  1. Forside (Integrationer): kort-grid for alle værktøjer
-  2. Kampagneside: søgning + tabel med farvet status og nøgletal
-
-Integrationer: Customer.io, Lemlist, Instantly, Smartlead, Apollo, Clay, HubSpot.
+Sidebar-navigation:
+  • Integrationer  — forside + kampagner + kampagne-detalje med noter
+  • Noter & Eksperimenter — samlet overblik med søg/filter
 
 Dummy-data er standard. Thin API-klienter for Customer.io/Lemlist ligger klar
 til senere Live-brug — nye værktøjer er kun dummy indtil videre.
@@ -71,8 +69,20 @@ ALL_SOURCES = [
     SOURCE_HUBSPOT,
 ]
 
-# Antal kort pr. række på forsiden (2–3 kolonner)
+# Antal kort pr. række på forsiden
 GRID_COLS = 3
+
+# Sidebar-sektioner
+NAV_INTEGRATIONER = "Integrationer"
+NAV_NOTER = "Noter & Eksperimenter"
+
+# Note-felter (hypoteser / læringer / næste skridt)
+NOTE_FIELDS = ("hypothesis", "learning", "next_step")
+NOTE_FIELD_LABELS = {
+    "hypothesis": "Hypotese",
+    "learning": "Læring",
+    "next_step": "Næste skridt",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +420,41 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
     ]
 
 
+def get_seed_notes() -> dict[str, dict[str, str]]:
+    """
+    Forudfyldte noter på udvalgte kampagner (dummy).
+
+    Nøgle = campaign external_id. Persisteres i session_state for sessionen.
+    """
+    return {
+        "cio-101": {
+            "hypothesis": "Kortere onboarding-mails øger trial→paid i uge 1.",
+            "learning": "Åbningsrate OK, men klik falder efter mail 3.",
+            "next_step": "Test 3-mail vs 5-mail drip på næste cohort.",
+        },
+        "lem_abc123": {
+            "hypothesis": "Nordiske founders svarer bedre på partner-vinkel end product pitch.",
+            "learning": "Reply rate ~7% — bedst på tirsdag/torsdag send.",
+            "next_step": "Skalér til 2. bølge med samme subject-line.",
+        },
+        "ins_eu_cto_01": {
+            "hypothesis": "CTO-segment i EU reagerer på infra-cost angle.",
+            "learning": "Warm-up af nye inboxe påvirker deliverability negativt.",
+            "next_step": "Pause nye domains 5 dage; genoptag med lavere volume.",
+        },
+        "hs_noshow_02": {
+            "hypothesis": "Samme-dags SMS + email hæver rebook-rate efter no-show.",
+            "learning": "Email alene giver ~8% rebook; timing vigtigere end copy.",
+            "next_step": "Tilføj Slack-alert til AE inden for 30 min.",
+        },
+        "clay_enrich_01": {
+            "hypothesis": "Waterfall-enrich før Instantly løfter reply via bedre emails.",
+            "learning": "Catch-all domains skaber støj — filtrér dem fra.",
+            "next_step": "Tilføj verification-step i Clay-table før push.",
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # Status-mapping: API-værdier → vores fælles UI-status
 # ---------------------------------------------------------------------------
@@ -476,6 +521,18 @@ def _format_rate(part: int, whole: int) -> str:
     if rate is None:
         return "—"
     return f"{rate * 100:.1f}%"
+
+
+def _empty_note() -> dict[str, str]:
+    """Tom note-struktur for en kampagne."""
+    return {field: "" for field in NOTE_FIELDS}
+
+
+def _note_has_content(note: dict[str, str] | None) -> bool:
+    """True hvis mindst ét note-felt er udfyldt."""
+    if not note:
+        return False
+    return any(str(note.get(f, "")).strip() for f in NOTE_FIELDS)
 
 
 # ---------------------------------------------------------------------------
@@ -705,8 +762,98 @@ def load_campaigns(mode: str) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Hjælpere til UI
+# Session-state / navigation
 # ---------------------------------------------------------------------------
+def _init_session_state() -> None:
+    """Sæt defaults én gang pr. browser-session."""
+    defaults: dict[str, Any] = {
+        "nav_section": NAV_INTEGRATIONER,
+        "page": "home",  # home | campaigns | detail
+        "selected_source": None,
+        "selected_campaign_id": None,
+        "campaign_search": "",
+        "notes_search": "",
+        "notes_source_filter": "Alle",
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+    # Seed noter første gang (kopi, så brugeren kan redigere frit i sessionen)
+    if "campaign_notes" not in st.session_state:
+        seeded = get_seed_notes()
+        st.session_state["campaign_notes"] = {
+            cid: dict(note) for cid, note in seeded.items()
+        }
+
+
+def _clear_integration_drilldown() -> None:
+    """Nulstil kampagne-navigation når man skifter sektion / går hjem."""
+    st.session_state["page"] = "home"
+    st.session_state["selected_source"] = None
+    st.session_state["selected_campaign_id"] = None
+    st.session_state["campaign_search"] = ""
+
+
+def _on_nav_change() -> None:
+    """Callback: ryd drill-down når sidebar-sektion skifter."""
+    # Radio skriver allerede den nye værdi til nav_section via key=
+    _clear_integration_drilldown()
+    st.session_state["notes_search"] = ""
+    st.session_state["notes_source_filter"] = "Alle"
+
+
+def _go_to_source(source: str) -> None:
+    """Naviger til kampagnelisten for en given integration."""
+    st.session_state["nav_section"] = NAV_INTEGRATIONER
+    st.session_state["page"] = "campaigns"
+    st.session_state["selected_source"] = source
+    st.session_state["selected_campaign_id"] = None
+    st.session_state["campaign_search"] = ""
+
+
+def _go_home() -> None:
+    """Tilbage til Integrationer-forsiden."""
+    _clear_integration_drilldown()
+
+
+def _go_to_campaign(source: str, campaign_id: str) -> None:
+    """Åbn detaljevisning for én kampagne."""
+    st.session_state["nav_section"] = NAV_INTEGRATIONER
+    st.session_state["page"] = "detail"
+    st.session_state["selected_source"] = source
+    st.session_state["selected_campaign_id"] = campaign_id
+
+
+def _go_back_to_campaigns() -> None:
+    """Fra detalje → kampagneliste (samme integration)."""
+    st.session_state["page"] = "campaigns"
+    st.session_state["selected_campaign_id"] = None
+
+
+def _get_note(campaign_id: str) -> dict[str, str]:
+    """Hent (eller opret tom) note for en kampagne i session_state."""
+    notes: dict[str, dict[str, str]] = st.session_state.setdefault(
+        "campaign_notes", {}
+    )
+    if campaign_id not in notes:
+        notes[campaign_id] = _empty_note()
+    # Sikr at alle felter findes
+    for field in NOTE_FIELDS:
+        notes[campaign_id].setdefault(field, "")
+    return notes[campaign_id]
+
+
+def _find_campaign(
+    campaigns: list[dict[str, Any]], campaign_id: str
+) -> dict[str, Any] | None:
+    """Find kampagne via external_id."""
+    for c in campaigns:
+        if str(c.get("external_id", "")) == campaign_id:
+            return c
+    return None
+
+
 def _source_stats(campaigns: list[dict[str, Any]], source: str) -> dict[str, int]:
     """Antal kampagner + aktive for én integration."""
     rows = [c for c in campaigns if c.get("source") == source]
@@ -714,17 +861,9 @@ def _source_stats(campaigns: list[dict[str, Any]], source: str) -> dict[str, int
     return {"total": len(rows), "active": active}
 
 
-def _go_to_source(source: str) -> None:
-    """Naviger til kampagnesiden for en given integration."""
-    st.session_state["page"] = "campaigns"
-    st.session_state["selected_source"] = source
-
-
-def _go_home() -> None:
-    """Tilbage til Integrationer-forsiden."""
-    st.session_state["page"] = "home"
-    st.session_state["selected_source"] = None
-    st.session_state["campaign_search"] = ""
+def _count_active(campaigns: list[dict[str, Any]]) -> int:
+    """Antal aktive kampagner på tværs af alle integrationer."""
+    return sum(1 for c in campaigns if c.get("status") == STATUS_ACTIVE)
 
 
 def _inject_light_css() -> None:
@@ -732,7 +871,6 @@ def _inject_light_css() -> None:
     st.markdown(
         """
         <style>
-        /* Lidt luft mellem kortenes metric-rækker */
         div[data-testid="stVerticalBlockBorderWrapper"] {
             padding-top: 0.4rem;
             padding-bottom: 0.6rem;
@@ -747,7 +885,7 @@ def _inject_light_css() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sider
+# Sider — Integrationer
 # ---------------------------------------------------------------------------
 def render_integration_card(
     source: str,
@@ -782,16 +920,25 @@ def render_integration_card(
 
 
 def render_home(campaigns: list[dict[str, Any]]) -> None:
-    """Forside: Integrationer — alle værktøjer i et kort-grid (ingen filtre)."""
+    """Forside: Integrationer — aktiv-tæller + kort-grid (ingen filtre)."""
     st.title("Integrationer")
     st.caption(
-        "GTM-overblik · Customer.io, Lemlist, Instantly, Smartlead, "
+        "GTM-hub · Customer.io, Lemlist, Instantly, Smartlead, "
         "Apollo, Clay og HubSpot"
     )
 
+    # --- Hvad kører lige nu ---
+    active_count = _count_active(campaigns)
+    with st.container(border=True):
+        st.subheader("Hvad kører lige nu")
+        st.metric("Aktive kampagner", active_count)
+        st.caption(
+            "Antal kampagner med status Aktiv på tværs af alle integrationer."
+        )
+
     st.write("")
 
-    # Grid: GRID_COLS kolonner pr. række, wrap resterende kilder
+    # Grid: GRID_COLS kolonner pr. række
     for row_start in range(0, len(ALL_SOURCES), GRID_COLS):
         row_sources = ALL_SOURCES[row_start : row_start + GRID_COLS]
         cols = st.columns(GRID_COLS)
@@ -802,21 +949,18 @@ def render_home(campaigns: list[dict[str, Any]]) -> None:
 
 
 def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
-    """Kampagneside for én integration: tilbage, søgning, tabel."""
-    # Header med tilbage-knap
+    """Kampagneliste for én integration: tabel + vælg/åbn kampagne."""
     back_col, title_col = st.columns([1, 5], vertical_alignment="center")
     with back_col:
-        if st.button("← Tilbage", use_container_width=True):
+        if st.button("← Tilbage", use_container_width=True, key="back_to_home"):
             _go_home()
             st.rerun()
     with title_col:
         st.title(source)
-        st.caption("Kampagner for denne integration")
+        st.caption("Kampagner for denne integration — klik ind for noter")
 
-    # Kun kampagner for den valgte integration
     rows = [c for c in campaigns if c.get("source") == source]
 
-    # Simpel søgning på kampagnenavn
     search = st.text_input(
         "Søg på kampagnenavn",
         key="campaign_search",
@@ -832,8 +976,7 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
         st.write("Ingen kampagner matcher søgningen.")
         return
 
-    # List-of-dicts + st.table — ingen pandas/DataFrame, så Cloud's Arrow-dance
-    # (pyarrow 26 segfault → force <25) ikke behøver at matche vores pins.
+    # st.table(list[dict]) — ingen pandas/DataFrame (Cloud Arrow-crash)
     display_rows: list[dict[str, Any]] = []
     for c in rows:
         sent = _safe_int(c.get("sent"))
@@ -856,27 +999,258 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
 
     st.table(display_rows)
 
+    # Simpel, Cloud-sikker drill-down: selectbox + knap (undgår dataframe-klik)
+    st.write("")
+    st.markdown("**Åbn en kampagne**")
+    options = {
+        f"{c.get('name', '')}  ·  {c.get('external_id', '')}": str(
+            c.get("external_id", "")
+        )
+        for c in rows
+    }
+    labels = list(options.keys())
+    chosen_label = st.selectbox(
+        "Vælg kampagne",
+        options=labels,
+        key=f"campaign_pick_{source}",
+        label_visibility="collapsed",
+    )
+    if st.button(
+        "Åbn kampagne",
+        type="primary",
+        key=f"open_campaign_{source}",
+        use_container_width=False,
+    ):
+        campaign_id = options.get(chosen_label or "", "")
+        if campaign_id:
+            _go_to_campaign(source, campaign_id)
+            st.rerun()
+
+
+def render_campaign_detail(
+    campaigns: list[dict[str, Any]], source: str, campaign_id: str
+) -> None:
+    """Detaljevisning: metrics + note-felter (persisteret i session_state)."""
+    campaign = _find_campaign(campaigns, campaign_id)
+    if campaign is None or campaign.get("source") != source:
+        st.warning("Kampagnen blev ikke fundet. Går tilbage til listen.")
+        _go_back_to_campaigns()
+        st.rerun()
+        return
+
+    back_col, title_col = st.columns([1, 5], vertical_alignment="center")
+    with back_col:
+        if st.button(
+            "← Kampagner", use_container_width=True, key="back_to_campaigns"
+        ):
+            _go_back_to_campaigns()
+            st.rerun()
+    with title_col:
+        st.title(str(campaign.get("name", "Kampagne")))
+        st.caption(f"{source} · {campaign_id}")
+
+    sent = _safe_int(campaign.get("sent"))
+    opens = _safe_int(campaign.get("opens"))
+    clicks = _safe_int(campaign.get("clicks"))
+    replies = _safe_int(campaign.get("replies"))
+    leads = _safe_int(campaign.get("leads"), default=sent)
+    status_key = str(campaign.get("status") or STATUS_DRAFT)
+
+    # Metrics-række
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric(
+        "Status",
+        STATUS_DISPLAY.get(status_key, STATUS_LABELS.get(status_key, status_key)),
+    )
+    c2.metric("Open rate", _format_rate(opens, sent))
+    c3.metric("Reply rate", _format_rate(replies, sent))
+    c4.metric("Leads", leads)
+    c5.metric("Sent", sent)
+
+    with st.expander("Flere detaljer", expanded=False):
+        detail_rows = [
+            {
+                "Felt": "Kilde",
+                "Værdi": source,
+            },
+            {
+                "Felt": "External ID",
+                "Værdi": campaign_id,
+            },
+            {
+                "Felt": "Opens",
+                "Værdi": opens,
+            },
+            {
+                "Felt": "Clicks",
+                "Værdi": clicks,
+            },
+            {
+                "Felt": "Replies",
+                "Værdi": replies,
+            },
+        ]
+        st.table(detail_rows)
+
+    st.divider()
+    st.subheader("Noter / eksperiment")
+    st.caption(
+        "Hypotese, læring og næste skridt — gemmes i sessionen (ikke i database)."
+    )
+
+    note = _get_note(campaign_id)
+
+    # Widgets med unikke keys pr. kampagne; synk til session_state ved Gem
+    hyp = st.text_area(
+        NOTE_FIELD_LABELS["hypothesis"],
+        value=note.get("hypothesis", ""),
+        key=f"note_hyp_{campaign_id}",
+        height=80,
+        placeholder="Hvad tester vi?",
+    )
+    learn = st.text_area(
+        NOTE_FIELD_LABELS["learning"],
+        value=note.get("learning", ""),
+        key=f"note_learn_{campaign_id}",
+        height=80,
+        placeholder="Hvad lærte vi?",
+    )
+    nxt = st.text_area(
+        NOTE_FIELD_LABELS["next_step"],
+        value=note.get("next_step", ""),
+        key=f"note_next_{campaign_id}",
+        height=80,
+        placeholder="Hvad gør vi nu?",
+    )
+
+    if st.button("Gem note", type="primary", key=f"save_note_{campaign_id}"):
+        st.session_state["campaign_notes"][campaign_id] = {
+            "hypothesis": hyp or "",
+            "learning": learn or "",
+            "next_step": nxt or "",
+        }
+        st.success("Note gemt i denne session.")
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Side — Noter & Eksperimenter
+# ---------------------------------------------------------------------------
+def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
+    """Samlet overblik over noter på tværs af kampagner med søg/filter."""
+    st.title("Noter & Eksperimenter")
+    st.caption(
+        "Hypoteser, læringer og næste skridt på tværs af alle kampagner."
+    )
+
+    notes: dict[str, dict[str, str]] = st.session_state.get("campaign_notes", {})
+
+    # Byg liste af (campaign, note) for noter med indhold
+    entries: list[tuple[dict[str, Any], dict[str, str]]] = []
+    for c in campaigns:
+        cid = str(c.get("external_id", ""))
+        note = notes.get(cid) or _empty_note()
+        if _note_has_content(note):
+            entries.append((c, note))
+
+    # Filtre
+    f1, f2 = st.columns([2, 1])
+    with f1:
+        search = st.text_input(
+            "Søg i noter / kampagnenavn",
+            key="notes_search",
+            placeholder="Fx hypotese, læring, kampagnenavn…",
+        )
+    with f2:
+        source_options = ["Alle", *ALL_SOURCES]
+        source_filter = st.selectbox(
+            "Integration",
+            options=source_options,
+            key="notes_source_filter",
+        )
+
+    query = (search or "").strip().lower()
+    filtered: list[tuple[dict[str, Any], dict[str, str]]] = []
+    for c, note in entries:
+        if source_filter != "Alle" and c.get("source") != source_filter:
+            continue
+        if query:
+            haystack = " ".join(
+                [
+                    str(c.get("name", "")),
+                    str(c.get("source", "")),
+                    str(c.get("external_id", "")),
+                    note.get("hypothesis", ""),
+                    note.get("learning", ""),
+                    note.get("next_step", ""),
+                ]
+            ).lower()
+            if query not in haystack:
+                continue
+        filtered.append((c, note))
+
+    st.subheader(f"Noter ({len(filtered)})")
+
+    if not filtered:
+        st.write(
+            "Ingen noter matcher. Åbn en kampagne under Integrationer og tilføj en note."
+        )
+        return
+
+    for c, note in filtered:
+        cid = str(c.get("external_id", ""))
+        source = str(c.get("source", ""))
+        status_key = str(c.get("status") or STATUS_DRAFT)
+        with st.container(border=True):
+            head_l, head_r = st.columns([4, 1], vertical_alignment="center")
+            with head_l:
+                st.markdown(f"**{c.get('name', '')}**")
+                st.caption(
+                    f"{source} · "
+                    f"{STATUS_DISPLAY.get(status_key, status_key)} · "
+                    f"{cid}"
+                )
+            with head_r:
+                if st.button(
+                    "Åbn",
+                    key=f"notes_open_{cid}",
+                    use_container_width=True,
+                ):
+                    _go_to_campaign(source, cid)
+                    st.rerun()
+
+            # Vis note-felter kompakt (kun udfyldte)
+            for field in NOTE_FIELDS:
+                text = str(note.get(field, "")).strip()
+                if text:
+                    st.markdown(f"*{NOTE_FIELD_LABELS[field]}:* {text}")
+
 
 # ---------------------------------------------------------------------------
 # Streamlit UI
 # ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(
-        page_title="GTM overblik · Integrationer",
+        page_title="GTM hub · Integrationer",
         page_icon="📊",
         layout="wide",
     )
 
-    # Session-state til simpel navigation
-    if "page" not in st.session_state:
-        st.session_state["page"] = "home"
-    if "selected_source" not in st.session_state:
-        st.session_state["selected_source"] = None
-
+    _init_session_state()
     _inject_light_css()
 
-    # Sidebar: kun minimal Dummy/Live-toggle (standard = Dummy)
+    # Sidebar: sektion-nav + minimal Dummy/Live-toggle
     with st.sidebar:
+        st.header("Navigation")
+        st.radio(
+            "Sektion",
+            options=[NAV_INTEGRATIONER, NAV_NOTER],
+            key="nav_section",
+            on_change=_on_nav_change,
+            label_visibility="collapsed",
+        )
+
+        st.divider()
         st.header("Indstillinger")
         mode = st.radio(
             "Datakilde",
@@ -889,14 +1263,22 @@ def main() -> None:
         )
 
     campaigns = load_campaigns(mode)
+    section = st.session_state.get("nav_section", NAV_INTEGRATIONER)
 
+    if section == NAV_NOTER:
+        render_notes_page(campaigns)
+        return
+
+    # --- Integrationer ---
     page = st.session_state.get("page", "home")
     selected = st.session_state.get("selected_source")
+    campaign_id = st.session_state.get("selected_campaign_id")
 
-    if page == "campaigns" and selected in ALL_SOURCES:
+    if page == "detail" and selected in ALL_SOURCES and campaign_id:
+        render_campaign_detail(campaigns, selected, str(campaign_id))
+    elif page == "campaigns" and selected in ALL_SOURCES:
         render_campaigns(campaigns, selected)
     else:
-        # Sikrer at vi lander rent på forsiden hvis state er mærkelig
         st.session_state["page"] = "home"
         render_home(campaigns)
 
