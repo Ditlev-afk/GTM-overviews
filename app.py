@@ -1,12 +1,15 @@
 """
-GTM / commercial hub — Streamlit-app (Keen-inspireret) til partnerships & GTM.
+GTM Analytics Hub — Streamlit-app (Keen-inspireret) til partnerships & GTM.
 
-Sidebar-navigation:
-  • Integrationer  — forside + kampagner + kampagne-detalje med noter
-  • Noter & Eksperimenter — samlet overblik med søg/filter
+Sidebar-navigation (knap + on_click — IKKE st.radio med key=nav_section):
+  • Integrationer  — forside (anbefalinger-teaser + grid) + kampagner + detalje
+  • Analytics      — PostHog-lignende dummy-metrics + kampagneidéer
+  • Budget         — fordeling + 1–2 forslag
+  • Anbefalinger   — fuld liste (status, værktøj, link til kampagne)
+  • Noter          — samlet overblik over hypoteser/læringer
 
 Dummy-data er standard. Thin API-klienter for Customer.io/Lemlist ligger klar
-til senere Live-brug — nye værktøjer er kun dummy indtil videre.
+til senere Live-brug — nye værktøjer (inkl. PostHog) er kun dummy indtil videre.
 
 Kør lokalt:
   1. pip install -r requirements.txt
@@ -57,9 +60,11 @@ SOURCE_SMARTLEAD = "Smartlead"
 SOURCE_APOLLO = "Apollo"
 SOURCE_CLAY = "Clay"
 SOURCE_HUBSPOT = "HubSpot"
+SOURCE_POSTHOG = "PostHog"
 
-# Rækkefølge på forsiden (kort-grid)
+# Rækkefølge på forsiden (kort-grid) — PostHog først som analytics-anker
 ALL_SOURCES = [
+    SOURCE_POSTHOG,
     SOURCE_CUSTOMERIO,
     SOURCE_LEMLIST,
     SOURCE_INSTANTLY,
@@ -72,9 +77,31 @@ ALL_SOURCES = [
 # Antal kort pr. række på forsiden
 GRID_COLS = 3
 
-# Sidebar-sektioner
+# Sidebar-sektioner (eksakte labels)
 NAV_INTEGRATIONER = "Integrationer"
-NAV_NOTER = "Noter & Eksperimenter"
+NAV_ANALYTICS = "Analytics"
+NAV_BUDGET = "Budget"
+NAV_ANBEFALINGER = "Anbefalinger"
+NAV_NOTER = "Noter"
+
+NAV_SECTIONS = [
+    NAV_INTEGRATIONER,
+    NAV_ANALYTICS,
+    NAV_BUDGET,
+    NAV_ANBEFALINGER,
+    NAV_NOTER,
+]
+
+# Anbefaling-status (dansk)
+REC_STATUS_NY = "ny"
+REC_STATUS_OVERVEJELSE = "under overvejelse"
+REC_STATUS_IGANGSAT = "igangsat"
+
+REC_STATUS_DISPLAY = {
+    REC_STATUS_NY: "🟢 Ny",
+    REC_STATUS_OVERVEJELSE: "🟡 Under overvejelse",
+    REC_STATUS_IGANGSAT: "🔵 Igangsat",
+}
 
 # Note-felter (hypoteser / læringer / næste skridt)
 NOTE_FIELDS = ("hypothesis", "learning", "next_step")
@@ -86,11 +113,219 @@ NOTE_FIELD_LABELS = {
 
 
 # ---------------------------------------------------------------------------
-# Dummy-data — bruges når du tester UI uden API-nøgler
+# Dummy-anbefalinger — driver både forside-teaser og Anbefalinger-siden
+# ---------------------------------------------------------------------------
+def get_dummy_recommendations() -> list[dict[str, Any]]:
+    """
+    Returnerer dummy-anbefalinger (indsigt → handling).
+
+    Felter:
+      id, title, rationale, suggested_action, tool, status,
+      linked_campaign_id (optional)
+    """
+    return [
+        {
+            "id": "rec-001",
+            "title": "Høj drop-off i onboarding → start Customer.io-kampagne",
+            "rationale": (
+                "PostHog viser 48% drop-off mellem signup og første aktivering. "
+                "En kort drip kan løfte trial→activated."
+            ),
+            "suggested_action": "3-mail onboarding-drip med aktiverings-CTA",
+            "tool": SOURCE_CUSTOMERIO,
+            "status": REC_STATUS_IGANGSAT,
+            "linked_campaign_id": "cio-101",
+        },
+        {
+            "id": "rec-002",
+            "title": "Ad spend høj, men pipeline lav → øg outbound-fokus",
+            "rationale": (
+                "Budgettet går tungt til ads, mens SQL/pipeline er fladt. "
+                "Outbound (Lemlist/Instantly) har bedre reply→meeting-konvertering."
+            ),
+            "suggested_action": "Flyt 15% ad-budget til outbound sequences denne måned",
+            "tool": SOURCE_LEMLIST,
+            "status": REC_STATUS_OVERVEJELSE,
+            "linked_campaign_id": "lem_abc123",
+        },
+        {
+            "id": "rec-003",
+            "title": "Feature X adoption lav → product nudge + email",
+            "rationale": (
+                "Kun 22% af aktive brugere har prøvet Feature X. "
+                "In-app prompt + Customer.io-nudge kan øge adoption."
+            ),
+            "suggested_action": "PostHog feature flag + CIO nudge til non-adopters",
+            "tool": SOURCE_POSTHOG,
+            "status": REC_STATUS_NY,
+            "linked_campaign_id": None,
+        },
+        {
+            "id": "rec-004",
+            "title": "Demo no-show rate høj → HubSpot recovery-flow",
+            "rationale": (
+                "No-show ligger på ~28%. Samme-dags recovery (email/SMS) "
+                "har historisk hævet rebook."
+            ),
+            "suggested_action": "Skalér HubSpot demo no-show recovery",
+            "tool": SOURCE_HUBSPOT,
+            "status": REC_STATUS_IGANGSAT,
+            "linked_campaign_id": "hs_noshow_02",
+        },
+        {
+            "id": "rec-005",
+            "title": "CTO-segment i EU åbner godt → skalér Instantly",
+            "rationale": (
+                "Open rate ~47% på Series A CTOs. Deliverability er flaskehals — "
+                "ikke copy. Skalér forsigtigt efter warm-up."
+            ),
+            "suggested_action": "Øg volume 20% når inboxe er varme",
+            "tool": SOURCE_INSTANTLY,
+            "status": REC_STATUS_OVERVEJELSE,
+            "linked_campaign_id": "ins_eu_cto_01",
+        },
+        {
+            "id": "rec-006",
+            "title": "Enrichment-kvalitet svinger → Clay verification-step",
+            "rationale": (
+                "Catch-all domains skaber støj i Instantly. "
+                "Verification før push bør være standard."
+            ),
+            "suggested_action": "Tilføj verification-step i Clay før push til Instantly",
+            "tool": SOURCE_CLAY,
+            "status": REC_STATUS_NY,
+            "linked_campaign_id": "clay_enrich_01",
+        },
+    ]
+
+
+def get_dummy_analytics() -> dict[str, Any]:
+    """PostHog-lignende dummy-metrics til Analytics-siden."""
+    return {
+        "active_users_7d": 1840,
+        "active_users_30d": 4120,
+        "active_users_delta_pct": 6.2,
+        "feature_adoption": [
+            {"feature": "Feature X (export)", "adoption_pct": 22, "wau": 405},
+            {"feature": "Dashboards", "adoption_pct": 61, "wau": 1122},
+            {"feature": "Integrations hub", "adoption_pct": 38, "wau": 699},
+            {"feature": "AI assist", "adoption_pct": 14, "wau": 258},
+        ],
+        "drop_off_funnel": [
+            {"step": "Signup", "users": 1000, "drop_off_pct": 0},
+            {"step": "Email verified", "users": 820, "drop_off_pct": 18},
+            {"step": "Første projekt", "users": 540, "drop_off_pct": 34},
+            {"step": "Første aktivering", "users": 280, "drop_off_pct": 48},
+            {"step": "Paid convert", "users": 95, "drop_off_pct": 66},
+        ],
+        # Korte kampagneidéer knyttet til indsigt
+        "campaign_ideas": [
+            {
+                "insight": "48% drop-off før aktivering",
+                "idea": "Customer.io onboarding-drip (se rec-001)",
+                "recommendation_id": "rec-001",
+            },
+            {
+                "insight": "Feature X kun 22% adoption",
+                "idea": "In-app nudge + email til non-adopters (se rec-003)",
+                "recommendation_id": "rec-003",
+            },
+            {
+                "insight": "AI assist underudnyttet (14%)",
+                "idea": "HubSpot nurture til power-users + product tour",
+                "recommendation_id": None,
+            },
+        ],
+    }
+
+
+def get_dummy_budget() -> dict[str, Any]:
+    """Simpelt dummy-budget til Budget-siden."""
+    return {
+        "month_label": "Oktober 2026 (dummy)",
+        "total_dkk": 120_000,
+        "allocations": [
+            {"kategori": "Ads (paid)", "belob_dkk": 48_000, "pct": 40},
+            {"kategori": "Tools (stack)", "belob_dkk": 24_000, "pct": 20},
+            {"kategori": "Sales / outbound", "belob_dkk": 30_000, "pct": 25},
+            {"kategori": "Events / content", "belob_dkk": 12_000, "pct": 10},
+            {"kategori": "Buffer", "belob_dkk": 6_000, "pct": 5},
+        ],
+        "suggestions": [
+            {
+                "title": "Du bør nok prioritere sales mere denne måned",
+                "detail": (
+                    "Ads æder 40%, men pipeline er flad. "
+                    "Flyt ~15% (~7.200 kr) fra ads til outbound/sales tools."
+                ),
+            },
+            {
+                "title": "Tools-budget er OK — hold PostHog + enrichment",
+                "detail": (
+                    "Clay + PostHog understøtter anbefalingerne. "
+                    "Undgå nye tool-abonnementer før Feature X-adoption stiger."
+                ),
+            },
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Dummy-kampagner — bruges når du tester UI uden API-nøgler
 # ---------------------------------------------------------------------------
 def get_dummy_campaigns() -> list[dict[str, Any]]:
-    """Returnerer realistisk dummy-data for alle integrationer."""
+    """
+    Returnerer realistisk dummy-data for alle integrationer.
+
+    `linked_recommendation_id` kobler kampagne ↔ anbefaling (valgfrit).
+    """
     return [
+        # --- PostHog (product analytics / experiments som "kampagner") ---
+        {
+            "name": "PostHog — Onboarding funnel watch",
+            "source": SOURCE_POSTHOG,
+            "status": STATUS_ACTIVE,
+            "sent": 1000,
+            "opens": 820,
+            "clicks": 540,
+            "replies": 0,
+            "leads": 1000,
+            "external_id": "ph_funnel_01",
+            "linked_recommendation_id": "rec-001",
+            "insight_note": (
+                "Denne kampagne/indsigt blev startet pga. PostHog-indsigt: "
+                "høj drop-off før aktivering."
+            ),
+        },
+        {
+            "name": "PostHog — Feature X adoption experiment",
+            "source": SOURCE_POSTHOG,
+            "status": STATUS_ACTIVE,
+            "sent": 1840,
+            "opens": 405,
+            "clicks": 120,
+            "replies": 0,
+            "leads": 1840,
+            "external_id": "ph_feat_x_02",
+            "linked_recommendation_id": "rec-003",
+            "insight_note": (
+                "Denne kampagne blev startet pga. PostHog-indsigt: "
+                "lav Feature X-adoption (22%)."
+            ),
+        },
+        {
+            "name": "PostHog — AI assist exposure flag",
+            "source": SOURCE_POSTHOG,
+            "status": STATUS_DRAFT,
+            "sent": 0,
+            "opens": 0,
+            "clicks": 0,
+            "replies": 0,
+            "leads": 0,
+            "external_id": "ph_ai_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
+        },
         # --- Customer.io ---
         {
             "name": "Onboarding drip — nye trials",
@@ -102,6 +337,11 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 42,
             "leads": 980,
             "external_id": "cio-101",
+            "linked_recommendation_id": "rec-001",
+            "insight_note": (
+                "Denne kampagne blev startet pga. PostHog-indsigt X: "
+                "høj drop-off i onboarding (rec-001)."
+            ),
         },
         {
             "name": "Win-back (90 dage inactivity)",
@@ -113,6 +353,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 19,
             "leads": 640,
             "external_id": "cio-204",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Product update — Q4 features",
@@ -124,6 +366,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 120,
             "external_id": "cio-309",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Nurture — freemium → paid",
@@ -135,6 +379,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 110,
             "leads": 3200,
             "external_id": "cio-088",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- Lemlist ---
         {
@@ -147,6 +393,11 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 67,
             "leads": 750,
             "external_id": "lem_abc123",
+            "linked_recommendation_id": "rec-002",
+            "insight_note": (
+                "Denne kampagne understøtter anbefaling rec-002: "
+                "øg outbound-fokus vs. ads."
+            ),
         },
         {
             "name": "Cold — Agency partners DE/AT",
@@ -158,6 +409,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 12,
             "leads": 380,
             "external_id": "lem_def456",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Sequence draft — webinar follow-up",
@@ -169,6 +422,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 95,
             "external_id": "lem_ghi789",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Launch week — invite list",
@@ -180,6 +435,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 95,
             "leads": 1100,
             "external_id": "lem_jkl012",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- Instantly ---
         {
@@ -192,6 +449,11 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 142,
             "leads": 1850,
             "external_id": "ins_eu_cto_01",
+            "linked_recommendation_id": "rec-005",
+            "insight_note": (
+                "Denne kampagne blev skaleret pga. anbefaling rec-005 "
+                "(stærk open rate i CTO-segment)."
+            ),
         },
         {
             "name": "Instantly — Warm intro follow-up",
@@ -203,6 +465,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 58,
             "leads": 520,
             "external_id": "ins_warm_02",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Instantly — Inbox rotation test",
@@ -214,6 +478,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 4,
             "leads": 280,
             "external_id": "ins_rot_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Instantly — Q1 copy A/B draft",
@@ -225,6 +491,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 150,
             "external_id": "ins_ab_04",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- Smartlead ---
         {
@@ -237,6 +505,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 96,
             "leads": 1400,
             "external_id": "sl_plg_01",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Smartlead — Partner channel outreach",
@@ -248,6 +518,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 15,
             "leads": 480,
             "external_id": "sl_partner_02",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Smartlead — Event RSVP chase",
@@ -259,6 +531,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 72,
             "leads": 800,
             "external_id": "sl_event_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Smartlead — Multi-inbox draft",
@@ -270,6 +544,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 220,
             "external_id": "sl_draft_04",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- Apollo ---
         {
@@ -282,6 +558,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 61,
             "leads": 1100,
             "external_id": "apl_vps_01",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Apollo — Intent: hiring RevOps",
@@ -293,6 +571,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 39,
             "leads": 690,
             "external_id": "apl_intent_02",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Apollo — Sequence paused (bounce)",
@@ -304,6 +584,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 2,
             "leads": 200,
             "external_id": "apl_bounce_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Apollo — New ICP draft",
@@ -315,6 +597,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 340,
             "external_id": "apl_icp_04",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- Clay ---
         {
@@ -327,6 +611,11 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 900,
             "external_id": "clay_enrich_01",
+            "linked_recommendation_id": "rec-006",
+            "insight_note": (
+                "Denne kampagne er koblet til anbefaling rec-006 "
+                "(verification før push)."
+            ),
         },
         {
             "name": "Clay — Lookalike: closed-won accounts",
@@ -338,6 +627,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 450,
             "external_id": "clay_lal_02",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Clay — Waterfall email find (paused)",
@@ -349,6 +640,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 1200,
             "external_id": "clay_wf_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "Clay — Scraping table draft",
@@ -360,6 +653,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 80,
             "external_id": "clay_draft_04",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         # --- HubSpot ---
         {
@@ -372,6 +667,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 55,
             "leads": 2800,
             "external_id": "hs_mql_01",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "HubSpot — Demo no-show recovery",
@@ -383,6 +680,11 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 38,
             "leads": 420,
             "external_id": "hs_noshow_02",
+            "linked_recommendation_id": "rec-004",
+            "insight_note": (
+                "Denne kampagne blev startet pga. anbefaling rec-004 "
+                "(høj demo no-show rate)."
+            ),
         },
         {
             "name": "HubSpot — Newsletter pause (Q4)",
@@ -394,6 +696,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 22,
             "leads": 5100,
             "external_id": "hs_news_03",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "HubSpot — Lifecycle score draft",
@@ -405,6 +709,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 0,
             "leads": 0,
             "external_id": "hs_score_04",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
         {
             "name": "HubSpot — Customer success check-in",
@@ -416,6 +722,8 @@ def get_dummy_campaigns() -> list[dict[str, Any]]:
             "replies": 84,
             "leads": 950,
             "external_id": "hs_cs_05",
+            "linked_recommendation_id": None,
+            "insight_note": "",
         },
     ]
 
@@ -451,6 +759,11 @@ def get_seed_notes() -> dict[str, dict[str, str]]:
             "hypothesis": "Waterfall-enrich før Instantly løfter reply via bedre emails.",
             "learning": "Catch-all domains skaber støj — filtrér dem fra.",
             "next_step": "Tilføj verification-step i Clay-table før push.",
+        },
+        "ph_funnel_01": {
+            "hypothesis": "Drop-off før aktivering skyldes manglende first-value moment.",
+            "learning": "Største fald er mellem 'første projekt' og 'aktivering'.",
+            "next_step": "Kopier funnel-indsigt til CIO onboarding (rec-001).",
         },
     }
 
@@ -533,6 +846,27 @@ def _note_has_content(note: dict[str, str] | None) -> bool:
     if not note:
         return False
     return any(str(note.get(f, "")).strip() for f in NOTE_FIELDS)
+
+
+def _find_recommendation(rec_id: str | None) -> dict[str, Any] | None:
+    """Find anbefaling via id i dummy-listen."""
+    if not rec_id:
+        return None
+    for rec in get_dummy_recommendations():
+        if rec.get("id") == rec_id:
+            return rec
+    return None
+
+
+def _bar_line(label: str, value: int, max_value: int, unit: str = "%") -> str:
+    """Simpel tekst-bar til native Streamlit (ingen charts-libs)."""
+    width = 20
+    if max_value <= 0:
+        filled = 0
+    else:
+        filled = max(0, min(width, round(width * value / max_value)))
+    bar = "█" * filled + "░" * (width - filled)
+    return f"{label}: {bar} {value}{unit}"
 
 
 # ---------------------------------------------------------------------------
@@ -619,6 +953,8 @@ def fetch_customerio_campaigns() -> list[dict[str, Any]]:
                 "replies": _safe_int(item.get("replies") or metrics.get("replied")),
                 "leads": _safe_int(leads),
                 "external_id": str(item.get("id", "")),
+                "linked_recommendation_id": None,
+                "insight_note": "",
             }
         )
 
@@ -727,6 +1063,8 @@ def fetch_lemlist_campaigns() -> list[dict[str, Any]]:
                 "replies": _safe_int(replies),
                 "leads": _safe_int(leads),
                 "external_id": str(item.get("_id") or item.get("id") or ""),
+                "linked_recommendation_id": None,
+                "insight_note": "",
             }
         )
 
@@ -737,8 +1075,8 @@ def load_live_campaigns() -> list[dict[str, Any]]:
     """
     Hent fra CIO + Lemlist (fejl stopper ikke resten).
 
-    Instantly / Smartlead / Apollo / Clay / HubSpot har endnu ingen Live-klienter
-    — i Live-mode får du kun CIO/Lemlist indtil videre.
+    Instantly / Smartlead / Apollo / Clay / HubSpot / PostHog har endnu ingen
+    Live-klienter — i Live-mode får du kun CIO/Lemlist indtil videre.
     """
     campaigns: list[dict[str, Any]] = []
     campaigns.extend(fetch_customerio_campaigns())
@@ -771,9 +1109,11 @@ def _init_session_state() -> None:
         "page": "home",  # home | campaigns | detail
         "selected_source": None,
         "selected_campaign_id": None,
+        "selected_recommendation_id": None,
         "campaign_search": "",
         "notes_search": "",
         "notes_source_filter": "Alle",
+        "recs_status_filter": "Alle",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -801,20 +1141,49 @@ def _reset_notes_filters() -> None:
     st.session_state["notes_source_filter"] = "Alle"
 
 
-def _nav_to_integrationer() -> None:
-    """Sidebar-callback: skift til Integrationer (kør før widgets)."""
+def _reset_recs_filters() -> None:
+    """Nulstil anbefalings-filtre (kun i callbacks)."""
+    st.session_state["recs_status_filter"] = "Alle"
+    st.session_state["selected_recommendation_id"] = None
+
+
+def _set_nav(section: str) -> None:
+    """
+    Sidebar-callback: skift sektion.
+
+    Muterer kun session_state her — aldrig mid-run efter widget med samme key.
+    """
     prev = st.session_state.get("nav_section")
-    st.session_state["nav_section"] = NAV_INTEGRATIONER
-    if prev != NAV_INTEGRATIONER:
+    st.session_state["nav_section"] = section
+    if prev != section:
         _clear_integration_drilldown()
         _reset_notes_filters()
+        _reset_recs_filters()
+
+
+def _nav_to_integrationer() -> None:
+    """Sidebar-callback → Integrationer."""
+    _set_nav(NAV_INTEGRATIONER)
+
+
+def _nav_to_analytics() -> None:
+    """Sidebar-callback → Analytics."""
+    _set_nav(NAV_ANALYTICS)
+
+
+def _nav_to_budget() -> None:
+    """Sidebar-callback → Budget."""
+    _set_nav(NAV_BUDGET)
+
+
+def _nav_to_anbefalinger() -> None:
+    """Sidebar-callback → Anbefalinger."""
+    _set_nav(NAV_ANBEFALINGER)
 
 
 def _nav_to_noter() -> None:
-    """Sidebar-callback: skift til Noter & Eksperimenter (kør før widgets)."""
-    st.session_state["nav_section"] = NAV_NOTER
-    _clear_integration_drilldown()
-    _reset_notes_filters()
+    """Sidebar-callback → Noter."""
+    _set_nav(NAV_NOTER)
 
 
 def _go_to_source(source: str) -> None:
@@ -850,6 +1219,13 @@ def _open_picked_campaign(source: str) -> None:
     campaign_id = st.session_state.get(f"campaign_pick_{source}")
     if campaign_id:
         _go_to_campaign(source, str(campaign_id))
+
+
+def _go_to_recommendation(rec_id: str) -> None:
+    """Callback: hop til Anbefalinger og fremhæv én anbefaling."""
+    st.session_state["nav_section"] = NAV_ANBEFALINGER
+    st.session_state["selected_recommendation_id"] = rec_id
+    _clear_integration_drilldown()
 
 
 def _get_note(campaign_id: str) -> dict[str, str]:
@@ -906,7 +1282,7 @@ def _inject_light_css() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sider — Integrationer
+# Sider — Integrationer (forside + kampagner + detalje)
 # ---------------------------------------------------------------------------
 def render_integration_card(
     source: str,
@@ -940,13 +1316,53 @@ def render_integration_card(
         )
 
 
+def render_recommendation_teaser() -> None:
+    """Forside-teaser: 2–3 anbefalingskort + knap til Anbefalinger."""
+    st.subheader("Anbefalinger")
+    st.caption("Korte indsigter du kan handle på — fuld liste under Anbefalinger.")
+
+    recs = get_dummy_recommendations()[:3]
+    cols = st.columns(len(recs))
+    for idx, rec in enumerate(recs):
+        with cols[idx]:
+            with st.container(border=True):
+                status = str(rec.get("status") or REC_STATUS_NY)
+                st.markdown(f"**{rec.get('title', '')}**")
+                st.caption(
+                    f"{REC_STATUS_DISPLAY.get(status, status)} · {rec.get('tool', '')}"
+                )
+                rationale = str(rec.get("rationale", ""))
+                # Kort teaser-tekst
+                short = rationale if len(rationale) <= 140 else rationale[:137] + "…"
+                st.write(short)
+                st.button(
+                    "Se anbefaling",
+                    key=f"teaser_rec_{rec.get('id')}",
+                    use_container_width=True,
+                    on_click=_go_to_recommendation,
+                    args=(str(rec.get("id")),),
+                )
+
+    st.button(
+        "Gå til Anbefalinger →",
+        key="teaser_goto_anbefalinger",
+        type="secondary",
+        on_click=_nav_to_anbefalinger,
+    )
+
+
 def render_home(campaigns: list[dict[str, Any]]) -> None:
-    """Forside: Integrationer — aktiv-tæller + kort-grid (ingen filtre)."""
+    """Forside: Anbefalinger-teaser + Hvad kører lige nu + integrations-grid."""
     st.title("Integrationer")
     st.caption(
-        "GTM-hub · Customer.io, Lemlist, Instantly, Smartlead, "
-        "Apollo, Clay og HubSpot"
+        "GTM Analytics Hub · PostHog, Customer.io, Lemlist, Instantly, "
+        "Smartlead, Apollo, Clay og HubSpot"
     )
+
+    # --- Anbefalinger-teaser (øverst) ---
+    render_recommendation_teaser()
+
+    st.write("")
 
     # --- Hvad kører lige nu ---
     active_count = _count_active(campaigns)
@@ -958,6 +1374,8 @@ def render_home(campaigns: list[dict[str, Any]]) -> None:
         )
 
     st.write("")
+    st.subheader("Integrationer")
+    st.caption("Åbn et værktøj for kampagnetabel og detaljer. Ingen filtre her.")
 
     # Grid: GRID_COLS kolonner pr. række
     for row_start in range(0, len(ALL_SOURCES), GRID_COLS):
@@ -1008,6 +1426,7 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
         replies = _safe_int(c.get("replies"))
         leads = _safe_int(c.get("leads"), default=sent)
         status_key = str(c.get("status") or STATUS_DRAFT)
+        rec_id = c.get("linked_recommendation_id") or "—"
 
         display_rows.append(
             {
@@ -1018,13 +1437,13 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
                 "Open rate": _format_rate(opens, sent),
                 "Reply rate": _format_rate(replies, sent),
                 "Antal leads": leads,
+                "Anbefaling": rec_id,
             }
         )
 
     st.table(display_rows)
 
     # Simpel, Cloud-sikker drill-down: selectbox + knap (undgår dataframe-klik)
-    # Selectbox-værdi = campaign id; label via format_func — så on_click kan læse id direkte.
     st.write("")
     st.markdown("**Åbn en kampagne**")
     id_to_label = {
@@ -1052,7 +1471,7 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
 def render_campaign_detail(
     campaigns: list[dict[str, Any]], source: str, campaign_id: str
 ) -> None:
-    """Detaljevisning: metrics + note-felter (persisteret i session_state)."""
+    """Detaljevisning: metrics + anbefalings-link + note-felter."""
     campaign = _find_campaign(campaigns, campaign_id)
     if campaign is None or campaign.get("source") != source:
         st.warning("Kampagnen blev ikke fundet. Går tilbage til listen.")
@@ -1092,28 +1511,41 @@ def render_campaign_detail(
 
     with st.expander("Flere detaljer", expanded=False):
         detail_rows = [
+            {"Felt": "Kilde", "Værdi": source},
+            {"Felt": "External ID", "Værdi": campaign_id},
+            {"Felt": "Opens", "Værdi": opens},
+            {"Felt": "Clicks", "Værdi": clicks},
+            {"Felt": "Replies", "Værdi": replies},
             {
-                "Felt": "Kilde",
-                "Værdi": source,
-            },
-            {
-                "Felt": "External ID",
-                "Værdi": campaign_id,
-            },
-            {
-                "Felt": "Opens",
-                "Værdi": opens,
-            },
-            {
-                "Felt": "Clicks",
-                "Værdi": clicks,
-            },
-            {
-                "Felt": "Replies",
-                "Værdi": replies,
+                "Felt": "linked_recommendation_id",
+                "Værdi": campaign.get("linked_recommendation_id") or "—",
             },
         ]
         st.table(detail_rows)
+
+    # --- Link til anbefaling / PostHog-indsigt ---
+    rec_id = campaign.get("linked_recommendation_id")
+    insight_note = str(campaign.get("insight_note") or "").strip()
+    rec = _find_recommendation(str(rec_id) if rec_id else None)
+
+    if rec or insight_note:
+        st.divider()
+        st.subheader("Koblet anbefaling / indsigt")
+        if insight_note:
+            st.info(insight_note)
+        if rec:
+            st.markdown(f"**{rec.get('title', '')}** (`{rec.get('id')}`)")
+            st.caption(
+                f"{REC_STATUS_DISPLAY.get(str(rec.get('status')), rec.get('status'))} "
+                f"· {rec.get('tool', '')}"
+            )
+            st.write(rec.get("rationale", ""))
+            st.button(
+                "Åbn anbefaling",
+                key=f"detail_open_rec_{campaign_id}",
+                on_click=_go_to_recommendation,
+                args=(str(rec.get("id")),),
+            )
 
     st.divider()
     st.subheader("Noter / eksperiment")
@@ -1123,7 +1555,6 @@ def render_campaign_detail(
 
     note = _get_note(campaign_id)
 
-    # Widgets med unikke keys pr. kampagne; synk til session_state ved Gem
     hyp = st.text_area(
         NOTE_FIELD_LABELS["hypothesis"],
         value=note.get("hypothesis", ""),
@@ -1157,18 +1588,205 @@ def render_campaign_detail(
 
 
 # ---------------------------------------------------------------------------
-# Side — Noter & Eksperimenter
+# Side — Analytics (PostHog-lignende dummy)
+# ---------------------------------------------------------------------------
+def render_analytics_page() -> None:
+    """Dummy PostHog-metrics: adoption, drop-off, aktive brugere + kampagneidéer."""
+    st.title("Analytics")
+    st.caption("PostHog-lignende indsigter (dummy) — koblet til mulige kampagner.")
+
+    data = get_dummy_analytics()
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Aktive brugere (7d)", data["active_users_7d"])
+    m2.metric(
+        "Aktive brugere (30d)",
+        data["active_users_30d"],
+        delta=f"+{data['active_users_delta_pct']}%",
+    )
+    # Gennemsnitlig adoption som hurtig signal
+    adoptions = [row["adoption_pct"] for row in data["feature_adoption"]]
+    avg_adopt = round(sum(adoptions) / len(adoptions)) if adoptions else 0
+    m3.metric("Gns. feature adoption", f"{avg_adopt}%")
+
+    st.subheader("Feature adoption")
+    st.caption("Andel af WAU der har brugt featuren (dummy).")
+    adopt_table = [
+        {
+            "Feature": row["feature"],
+            "Adoption": f"{row['adoption_pct']}%",
+            "WAU": row["wau"],
+        }
+        for row in data["feature_adoption"]
+    ]
+    st.table(adopt_table)
+    for row in data["feature_adoption"]:
+        st.text(_bar_line(row["feature"], row["adoption_pct"], 100, "%"))
+
+    st.subheader("Drop-off i onboarding-funnel")
+    st.caption("Hvor brugere falder fra (dummy PostHog funnel).")
+    funnel_table = [
+        {
+            "Trin": row["step"],
+            "Brugere": row["users"],
+            "Drop-off fra forrige": (
+                "—" if row["drop_off_pct"] == 0 else f"{row['drop_off_pct']}%"
+            ),
+        }
+        for row in data["drop_off_funnel"]
+    ]
+    st.table(funnel_table)
+    max_users = max(row["users"] for row in data["drop_off_funnel"]) or 1
+    for row in data["drop_off_funnel"]:
+        st.text(_bar_line(row["step"], row["users"], max_users, " brugere"))
+
+    st.subheader("Mulige kampagneidéer")
+    st.caption("Hver indsigt → kort idé (link til anbefaling hvor det findes).")
+    for idea in data["campaign_ideas"]:
+        with st.container(border=True):
+            st.markdown(f"**Indsigt:** {idea['insight']}")
+            st.write(f"Idé: {idea['idea']}")
+            rec_id = idea.get("recommendation_id")
+            if rec_id:
+                st.button(
+                    f"Åbn {rec_id}",
+                    key=f"analytics_rec_{rec_id}",
+                    on_click=_go_to_recommendation,
+                    args=(str(rec_id),),
+                )
+
+
+# ---------------------------------------------------------------------------
+# Side — Budget
+# ---------------------------------------------------------------------------
+def render_budget_page() -> None:
+    """Simpelt budget-overblik + 1–2 forslag baseret på dummy-historien."""
+    st.title("Budget")
+    budget = get_dummy_budget()
+    st.caption(f"Fordeling for {budget['month_label']} — kun dummy-tal.")
+
+    st.metric("Samlet budget", f"{budget['total_dkk']:,} DKK".replace(",", "."))
+
+    st.subheader("Allokering")
+    alloc_table = [
+        {
+            "Kategori": row["kategori"],
+            "Beløb (DKK)": f"{row['belob_dkk']:,}".replace(",", "."),
+            "Andel": f"{row['pct']}%",
+        }
+        for row in budget["allocations"]
+    ]
+    st.table(alloc_table)
+    for row in budget["allocations"]:
+        st.text(_bar_line(row["kategori"], row["pct"], 100, "%"))
+
+    st.subheader("Forslag")
+    for idx, sug in enumerate(budget["suggestions"]):
+        with st.container(border=True):
+            st.markdown(f"**{sug['title']}**")
+            st.write(sug["detail"])
+            if idx == 0:
+                st.button(
+                    "Se outbound-anbefaling",
+                    key="budget_goto_rec_002",
+                    on_click=_go_to_recommendation,
+                    args=("rec-002",),
+                )
+
+
+# ---------------------------------------------------------------------------
+# Side — Anbefalinger
+# ---------------------------------------------------------------------------
+def render_anbefalinger_page(campaigns: list[dict[str, Any]]) -> None:
+    """Fuld liste af anbefalinger med status, værktøj og kampagne-link."""
+    st.title("Anbefalinger")
+    st.caption(
+        "Indsigt → foreslået handling. Nogle er koblet til en aktiv kampagne."
+    )
+
+    recs = get_dummy_recommendations()
+    highlight_id = st.session_state.get("selected_recommendation_id")
+
+    status_options = [
+        "Alle",
+        REC_STATUS_NY,
+        REC_STATUS_OVERVEJELSE,
+        REC_STATUS_IGANGSAT,
+    ]
+    status_filter = st.selectbox(
+        "Status",
+        options=status_options,
+        key="recs_status_filter",
+    )
+
+    filtered = [
+        r
+        for r in recs
+        if status_filter == "Alle" or r.get("status") == status_filter
+    ]
+
+    # Vis fremhævet først hvis den matcher filter
+    if highlight_id:
+        filtered = sorted(
+            filtered,
+            key=lambda r: 0 if r.get("id") == highlight_id else 1,
+        )
+
+    st.subheader(f"Anbefalinger ({len(filtered)})")
+
+    for rec in filtered:
+        rid = str(rec.get("id", ""))
+        status = str(rec.get("status") or REC_STATUS_NY)
+        linked_cid = rec.get("linked_campaign_id")
+        campaign = (
+            _find_campaign(campaigns, str(linked_cid)) if linked_cid else None
+        )
+
+        with st.container(border=True):
+            if highlight_id and rid == highlight_id:
+                st.caption("★ Fremhævet fra navigation")
+
+            head_l, head_r = st.columns([4, 1], vertical_alignment="center")
+            with head_l:
+                st.markdown(f"**{rec.get('title', '')}**")
+                st.caption(
+                    f"`{rid}` · {REC_STATUS_DISPLAY.get(status, status)} · "
+                    f"{rec.get('tool', '')}"
+                )
+            with head_r:
+                if campaign:
+                    st.button(
+                        "Kampagne",
+                        key=f"rec_open_camp_{rid}",
+                        use_container_width=True,
+                        on_click=_go_to_campaign,
+                        args=(
+                            str(campaign.get("source")),
+                            str(campaign.get("external_id")),
+                        ),
+                    )
+
+            st.markdown(f"*Begrundelse:* {rec.get('rationale', '')}")
+            st.markdown(f"*Foreslået handling:* {rec.get('suggested_action', '')}")
+            if linked_cid:
+                camp_name = (
+                    campaign.get("name") if campaign else "(kampagne ikke fundet)"
+                )
+                st.caption(f"Koblet kampagne: {camp_name} · `{linked_cid}`")
+
+
+# ---------------------------------------------------------------------------
+# Side — Noter
 # ---------------------------------------------------------------------------
 def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
     """Samlet overblik over noter på tværs af kampagner med søg/filter."""
-    st.title("Noter & Eksperimenter")
+    st.title("Noter")
     st.caption(
         "Hypoteser, læringer og næste skridt på tværs af alle kampagner."
     )
 
     notes: dict[str, dict[str, str]] = st.session_state.get("campaign_notes", {})
 
-    # Byg liste af (campaign, note) for noter med indhold
     entries: list[tuple[dict[str, Any], dict[str, str]]] = []
     for c in campaigns:
         cid = str(c.get("external_id", ""))
@@ -1176,7 +1794,6 @@ def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
         if _note_has_content(note):
             entries.append((c, note))
 
-    # Filtre
     f1, f2 = st.columns([2, 1])
     with f1:
         search = st.text_input(
@@ -1242,7 +1859,6 @@ def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
                     args=(source, cid),
                 )
 
-            # Vis note-felter kompakt (kun udfyldte)
             for field in NOTE_FIELDS:
                 text = str(note.get(field, "")).strip()
                 if text:
@@ -1254,7 +1870,7 @@ def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
 # ---------------------------------------------------------------------------
 def main() -> None:
     st.set_page_config(
-        page_title="GTM hub · Integrationer",
+        page_title="GTM Analytics Hub",
         page_icon="📊",
         layout="wide",
     )
@@ -1264,23 +1880,25 @@ def main() -> None:
 
     # Sidebar: knap-nav (ikke radio med key=nav_section) — undgår
     # StreamlitWidgetAlreadyInstantiatedError når callbacks sætter nav_section.
+    nav_callbacks = {
+        NAV_INTEGRATIONER: _nav_to_integrationer,
+        NAV_ANALYTICS: _nav_to_analytics,
+        NAV_BUDGET: _nav_to_budget,
+        NAV_ANBEFALINGER: _nav_to_anbefalinger,
+        NAV_NOTER: _nav_to_noter,
+    }
+
     with st.sidebar:
         st.header("Navigation")
         current_nav = st.session_state.get("nav_section", NAV_INTEGRATIONER)
-        st.button(
-            NAV_INTEGRATIONER,
-            key="nav_btn_integrationer",
-            use_container_width=True,
-            type="primary" if current_nav == NAV_INTEGRATIONER else "secondary",
-            on_click=_nav_to_integrationer,
-        )
-        st.button(
-            NAV_NOTER,
-            key="nav_btn_noter",
-            use_container_width=True,
-            type="primary" if current_nav == NAV_NOTER else "secondary",
-            on_click=_nav_to_noter,
-        )
+        for section in NAV_SECTIONS:
+            st.button(
+                section,
+                key=f"nav_btn_{section}",
+                use_container_width=True,
+                type="primary" if current_nav == section else "secondary",
+                on_click=nav_callbacks[section],
+            )
 
         st.divider()
         st.header("Indstillinger")
@@ -1289,13 +1907,25 @@ def main() -> None:
             options=["Dummy", "Live"],
             index=0,
             help=(
-                "Dummy kræver ingen API-nøgler (alle 7 værktøjer). "
+                "Dummy kræver ingen API-nøgler (alle 8 værktøjer inkl. PostHog). "
                 "Live henter kun Customer.io + Lemlist indtil videre."
             ),
         )
 
     campaigns = load_campaigns(mode)
     section = st.session_state.get("nav_section", NAV_INTEGRATIONER)
+
+    if section == NAV_ANALYTICS:
+        render_analytics_page()
+        return
+
+    if section == NAV_BUDGET:
+        render_budget_page()
+        return
+
+    if section == NAV_ANBEFALINGER:
+        render_anbefalinger_page(campaigns)
+        return
 
     if section == NAV_NOTER:
         render_notes_page(campaigns)

@@ -1,16 +1,23 @@
-# GTM hub · Integrationer & Noter
+# GTM Analytics Hub
 
-Keen-inspireret Streamlit-hub til partnerships/GTM-arbejde.
+Keen-inspireret Streamlit-hub til partnerships/GTM — data, indsigter og anbefalinger.
 
-**Customer.io · Lemlist · Instantly · Smartlead · Apollo · Clay · HubSpot**
+**PostHog · Customer.io · Lemlist · Instantly · Smartlead · Apollo · Clay · HubSpot**
 
-## Sådan virker UI
+## Sidebar
 
-1. **Sidebar** — skift mellem **Integrationer** og **Noter & Eksperimenter** (Dummy er standard)
-2. **Forside** — “Hvad kører lige nu” (aktive kampagner) + kort-grid for alle værktøjer
-3. **Åbn et kort** — kampagnetabel (status, open/reply rate, leads) + vælg/åbn en kampagne
-4. **Kampagne-detalje** — metrics + note (hypotese / læring / næste skridt) i sessionen
-5. **Noter & Eksperimenter** — samlet overblik med søg/filter; knap tilbage til kampagnen
+1. **Integrationer** — anbefalings-teaser, “Hvad kører lige nu”, integrations-grid → kampagner → detalje
+2. **Analytics** — PostHog-lignende dummy (adoption, drop-off, aktive brugere) + kampagneidéer
+3. **Budget** — fordeling + forslag (dummy)
+4. **Anbefalinger** — fuld liste (status, værktøj, kobling til kampagne)
+5. **Noter** — hypoteser / læringer / næste skridt på tværs af kampagner
+
+Navigation bruger knapper + `on_click` (ikke `st.radio` med `key="nav_section"`).
+
+## Kampagne-flow
+
+1. Åbn et integrationskort → tabel (status, rates, leads, anbefaling-id)
+2. Åbn kampagne → metrics + link til anbefaling (`linked_recommendation_id`) + noter i sessionen
 
 Standard er **Dummy data** (ingen API-kald). Thin Live-klienter findes for Customer.io og Lemlist.
 
