@@ -795,16 +795,30 @@ def _clear_integration_drilldown() -> None:
     st.session_state["campaign_search"] = ""
 
 
-def _on_nav_change() -> None:
-    """Callback: ryd drill-down når sidebar-sektion skifter."""
-    # Radio skriver allerede den nye værdi til nav_section via key=
-    _clear_integration_drilldown()
+def _reset_notes_filters() -> None:
+    """Nulstil noter-filtre (kun i callbacks — før widgets instantiates)."""
     st.session_state["notes_search"] = ""
     st.session_state["notes_source_filter"] = "Alle"
 
 
+def _nav_to_integrationer() -> None:
+    """Sidebar-callback: skift til Integrationer (kør før widgets)."""
+    prev = st.session_state.get("nav_section")
+    st.session_state["nav_section"] = NAV_INTEGRATIONER
+    if prev != NAV_INTEGRATIONER:
+        _clear_integration_drilldown()
+        _reset_notes_filters()
+
+
+def _nav_to_noter() -> None:
+    """Sidebar-callback: skift til Noter & Eksperimenter (kør før widgets)."""
+    st.session_state["nav_section"] = NAV_NOTER
+    _clear_integration_drilldown()
+    _reset_notes_filters()
+
+
 def _go_to_source(source: str) -> None:
-    """Naviger til kampagnelisten for en given integration."""
+    """Callback: naviger til kampagnelisten for en given integration."""
     st.session_state["nav_section"] = NAV_INTEGRATIONER
     st.session_state["page"] = "campaigns"
     st.session_state["selected_source"] = source
@@ -813,12 +827,12 @@ def _go_to_source(source: str) -> None:
 
 
 def _go_home() -> None:
-    """Tilbage til Integrationer-forsiden."""
+    """Callback: tilbage til Integrationer-forsiden."""
     _clear_integration_drilldown()
 
 
 def _go_to_campaign(source: str, campaign_id: str) -> None:
-    """Åbn detaljevisning for én kampagne."""
+    """Callback: åbn detaljevisning for én kampagne."""
     st.session_state["nav_section"] = NAV_INTEGRATIONER
     st.session_state["page"] = "detail"
     st.session_state["selected_source"] = source
@@ -826,9 +840,16 @@ def _go_to_campaign(source: str, campaign_id: str) -> None:
 
 
 def _go_back_to_campaigns() -> None:
-    """Fra detalje → kampagneliste (samme integration)."""
+    """Callback: fra detalje → kampagneliste (samme integration)."""
     st.session_state["page"] = "campaigns"
     st.session_state["selected_campaign_id"] = None
+
+
+def _open_picked_campaign(source: str) -> None:
+    """Callback: læs selectbox-valg (campaign id) og åbn detalje."""
+    campaign_id = st.session_state.get(f"campaign_pick_{source}")
+    if campaign_id:
+        _go_to_campaign(source, str(campaign_id))
 
 
 def _get_note(campaign_id: str) -> dict[str, str]:
@@ -909,14 +930,14 @@ def render_integration_card(
             st.caption("○ Ingen data")
 
         st.write("")  # lidt luft før knappen
-        if st.button(
+        st.button(
             f"Åbn {source}",
             key=f"open_{source}",
             use_container_width=True,
             type="primary",
-        ):
-            _go_to_source(source)
-            st.rerun()
+            on_click=_go_to_source,
+            args=(source,),
+        )
 
 
 def render_home(campaigns: list[dict[str, Any]]) -> None:
@@ -952,9 +973,12 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
     """Kampagneliste for én integration: tabel + vælg/åbn kampagne."""
     back_col, title_col = st.columns([1, 5], vertical_alignment="center")
     with back_col:
-        if st.button("← Tilbage", use_container_width=True, key="back_to_home"):
-            _go_home()
-            st.rerun()
+        st.button(
+            "← Tilbage",
+            use_container_width=True,
+            key="back_to_home",
+            on_click=_go_home,
+        )
     with title_col:
         st.title(source)
         st.caption("Kampagner for denne integration — klik ind for noter")
@@ -1000,31 +1024,29 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
     st.table(display_rows)
 
     # Simpel, Cloud-sikker drill-down: selectbox + knap (undgår dataframe-klik)
+    # Selectbox-værdi = campaign id; label via format_func — så on_click kan læse id direkte.
     st.write("")
     st.markdown("**Åbn en kampagne**")
-    options = {
-        f"{c.get('name', '')}  ·  {c.get('external_id', '')}": str(
-            c.get("external_id", "")
-        )
+    id_to_label = {
+        str(c.get("external_id", "")): f"{c.get('name', '')}  ·  {c.get('external_id', '')}"
         for c in rows
     }
-    labels = list(options.keys())
-    chosen_label = st.selectbox(
+    campaign_ids = list(id_to_label.keys())
+    st.selectbox(
         "Vælg kampagne",
-        options=labels,
+        options=campaign_ids,
+        format_func=lambda cid: id_to_label.get(cid, cid),
         key=f"campaign_pick_{source}",
         label_visibility="collapsed",
     )
-    if st.button(
+    st.button(
         "Åbn kampagne",
         type="primary",
         key=f"open_campaign_{source}",
         use_container_width=False,
-    ):
-        campaign_id = options.get(chosen_label or "", "")
-        if campaign_id:
-            _go_to_campaign(source, campaign_id)
-            st.rerun()
+        on_click=_open_picked_campaign,
+        args=(source,),
+    )
 
 
 def render_campaign_detail(
@@ -1040,11 +1062,12 @@ def render_campaign_detail(
 
     back_col, title_col = st.columns([1, 5], vertical_alignment="center")
     with back_col:
-        if st.button(
-            "← Kampagner", use_container_width=True, key="back_to_campaigns"
-        ):
-            _go_back_to_campaigns()
-            st.rerun()
+        st.button(
+            "← Kampagner",
+            use_container_width=True,
+            key="back_to_campaigns",
+            on_click=_go_back_to_campaigns,
+        )
     with title_col:
         st.title(str(campaign.get("name", "Kampagne")))
         st.caption(f"{source} · {campaign_id}")
@@ -1211,13 +1234,13 @@ def render_notes_page(campaigns: list[dict[str, Any]]) -> None:
                     f"{cid}"
                 )
             with head_r:
-                if st.button(
+                st.button(
                     "Åbn",
                     key=f"notes_open_{cid}",
                     use_container_width=True,
-                ):
-                    _go_to_campaign(source, cid)
-                    st.rerun()
+                    on_click=_go_to_campaign,
+                    args=(source, cid),
+                )
 
             # Vis note-felter kompakt (kun udfyldte)
             for field in NOTE_FIELDS:
@@ -1239,15 +1262,24 @@ def main() -> None:
     _init_session_state()
     _inject_light_css()
 
-    # Sidebar: sektion-nav + minimal Dummy/Live-toggle
+    # Sidebar: knap-nav (ikke radio med key=nav_section) — undgår
+    # StreamlitWidgetAlreadyInstantiatedError når callbacks sætter nav_section.
     with st.sidebar:
         st.header("Navigation")
-        st.radio(
-            "Sektion",
-            options=[NAV_INTEGRATIONER, NAV_NOTER],
-            key="nav_section",
-            on_change=_on_nav_change,
-            label_visibility="collapsed",
+        current_nav = st.session_state.get("nav_section", NAV_INTEGRATIONER)
+        st.button(
+            NAV_INTEGRATIONER,
+            key="nav_btn_integrationer",
+            use_container_width=True,
+            type="primary" if current_nav == NAV_INTEGRATIONER else "secondary",
+            on_click=_nav_to_integrationer,
+        )
+        st.button(
+            NAV_NOTER,
+            key="nav_btn_noter",
+            use_container_width=True,
+            type="primary" if current_nav == NAV_NOTER else "secondary",
+            on_click=_nav_to_noter,
         )
 
         st.divider()
