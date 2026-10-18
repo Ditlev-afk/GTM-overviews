@@ -4,6 +4,7 @@
 # No pandas/pyarrow/numpy pins: the campaign table uses st.table(list[dict])
 # so Streamlit Cloud's Arrow replacement dance does not matter for our code.
 # Streamlit itself may still pull transitive deps; keep ours minimal.
+# STREAMLIT_CLOUD_BUILD=2
 
 streamlit==1.66.0
 requests==2.32.3
