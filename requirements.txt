@@ -1,11 +1,12 @@
-# GTM Campaign Overview — Python dependencies
+# GTM Analytics Hub — Python dependencies
 # Install: pip install -r requirements.txt
 #
-# No pandas/pyarrow/numpy pins: the campaign table uses st.table(list[dict])
-# so Streamlit Cloud's Arrow replacement dance does not matter for our code.
-# Streamlit itself may still pull transitive deps; keep ours minimal.
-# STREAMLIT_CLOUD_BUILD=6
+# Tables use markdown (render_md_table) — not st.dataframe / st.table — so our
+# code never builds Arrow tables. Streamlit still pulls pyarrow transitively;
+# pin numpy>=2 so that import does not crash on Cloud / local resolve.
+# STREAMLIT_CLOUD_BUILD=7
 
 streamlit==1.66.0
 requests==2.32.3
 python-dotenv==1.0.1
+numpy>=2.0.0,<3

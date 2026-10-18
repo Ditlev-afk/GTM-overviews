@@ -869,6 +869,33 @@ def _bar_line(label: str, value: int, max_value: int, unit: str = "%") -> str:
     return f"{label}: {bar} {value}{unit}"
 
 
+def _escape_md_cell(value: Any) -> str:
+    """Escape pipe/newlines så markdown-tabeller ikke knækker."""
+    text = str(value).replace("\n", " ").replace("|", "\\|")
+    return text
+
+
+def render_md_table(rows: list[dict[str, Any]]) -> None:
+    """
+    Vis tabel som markdown — undgår st.table/st.dataframe (pyarrow/Arrow).
+
+    Forventer ens keys i alle rækker. Tom liste → kort besked.
+    """
+    if not rows:
+        st.write("Ingen rækker.")
+        return
+    headers = list(rows[0].keys())
+    header_line = "| " + " | ".join(_escape_md_cell(h) for h in headers) + " |"
+    sep_line = "| " + " | ".join("---" for _ in headers) + " |"
+    body_lines = [
+        "| "
+        + " | ".join(_escape_md_cell(row.get(h, "")) for h in headers)
+        + " |"
+        for row in rows
+    ]
+    st.markdown("\n".join([header_line, sep_line, *body_lines]))
+
+
 # ---------------------------------------------------------------------------
 # Thin API-klienter (kun CIO + Lemlist; andre værktøjer er dummy indtil videre)
 # ---------------------------------------------------------------------------
@@ -1418,7 +1445,7 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
         st.write("Ingen kampagner matcher søgningen.")
         return
 
-    # st.table(list[dict]) — ingen pandas/DataFrame (Cloud Arrow-crash)
+    # Markdown-tabel — ingen st.table/st.dataframe (Cloud pyarrow/Arrow)
     display_rows: list[dict[str, Any]] = []
     for c in rows:
         sent = _safe_int(c.get("sent"))
@@ -1441,7 +1468,7 @@ def render_campaigns(campaigns: list[dict[str, Any]], source: str) -> None:
             }
         )
 
-    st.table(display_rows)
+    render_md_table(display_rows)
 
     # Simpel, Cloud-sikker drill-down: selectbox + knap (undgår dataframe-klik)
     st.write("")
@@ -1521,7 +1548,7 @@ def render_campaign_detail(
                 "Værdi": campaign.get("linked_recommendation_id") or "—",
             },
         ]
-        st.table(detail_rows)
+        render_md_table(detail_rows)
 
     # --- Link til anbefaling / PostHog-indsigt ---
     rec_id = campaign.get("linked_recommendation_id")
@@ -1619,7 +1646,7 @@ def render_analytics_page() -> None:
         }
         for row in data["feature_adoption"]
     ]
-    st.table(adopt_table)
+    render_md_table(adopt_table)
     for row in data["feature_adoption"]:
         st.text(_bar_line(row["feature"], row["adoption_pct"], 100, "%"))
 
@@ -1635,7 +1662,7 @@ def render_analytics_page() -> None:
         }
         for row in data["drop_off_funnel"]
     ]
-    st.table(funnel_table)
+    render_md_table(funnel_table)
     max_users = max(row["users"] for row in data["drop_off_funnel"]) or 1
     for row in data["drop_off_funnel"]:
         st.text(_bar_line(row["step"], row["users"], max_users, " brugere"))
@@ -1676,7 +1703,7 @@ def render_budget_page() -> None:
         }
         for row in budget["allocations"]
     ]
-    st.table(alloc_table)
+    render_md_table(alloc_table)
     for row in budget["allocations"]:
         st.text(_bar_line(row["kategori"], row["pct"], 100, "%"))
 

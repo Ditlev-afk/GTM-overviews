@@ -33,7 +33,7 @@ streamlit run app.py
 
 Efter push: vent på auto-redeploy, eller **Reboot app** i Cloud-dashboardet hvis den hænger.
 
-Hvis app-settings tillader det, vælg **Python 3.12**. Appen bruger `st.table(list[dict])` uden pandas/pyarrow.
+Hvis app-settings tillader det, vælg **Python 3.12**. Appen renderer tabeller som markdown (ikke `st.dataframe`/`st.table`) og pinner `numpy>=2` så Streamlits transitive pyarrow ikke crasher.
 
 ## Secrets
 
