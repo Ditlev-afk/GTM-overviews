@@ -1,7 +1,12 @@
 # GTM Campaign Overview — Python dependencies
 # Install: pip install -r requirements.txt
+#
+# Pin numpy>=2 so Streamlit Cloud's pyarrow (pulled in by st.dataframe)
+# does not crash with: "pyarrow requires NumPy 2.0 or newer".
 
 streamlit==1.40.2
 requests==2.32.3
 python-dotenv==1.0.1
 pandas==2.2.3
+numpy>=2.0.0,<3
+pyarrow>=14.0.0
